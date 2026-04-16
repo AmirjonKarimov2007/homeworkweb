@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(cd:*)",
+      "Bash(cat:*)",
+      "Bash(find frontend:*)",
+      "Bash(source:*)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
+      "Bash(/c/Users/alfatech.uz/AppData/Local/Programs/Python/Python311/python.exe -m alembic upgrade head)",
+      "Bash(/c/Users/alfatech.uz/AppData/Local/Programs/Python/Python311/python.exe -m alembic current)",
+      "Bash(/c/Users/alfatech.uz/AppData/Local/Programs/Python/Python311/python.exe -m alembic history)",
+      "Bash(/c/Users/alfatech.uz/AppData/Local/Programs/Python/Python311/python.exe -m alembic stamp 0002_billing_module)",
+      "Bash(/c/Users/alfatech.uz/AppData/Local/Programs/Python/Python311/python.exe -c \"import asyncio; from app.db.session import engine; async def check\\(\\): async with engine.connect\\(\\) as conn: result = await conn.execute\\(text\\(\\\\\"SELECT column_name FROM information_schema.columns WHERE table_name = 'groups'\\\\\"\\)\\); print\\([row[0] for row in result.fetchall\\(\\)]\\); asyncio.run\\(check\\(\\)\\)\")",
+      "Bash(/c/Users/alfatech.uz/AppData/Local/Programs/Python/Python311/python.exe -m alembic stamp 0003_add_courses)",
+      "Bash(python -m py_compile main.py handlers/start.py handlers/admin.py)",
+      "Bash(python -m compileall -q .)",
+      "Bash(python -m py_compile handlers/start.py)",
+      "Bash(curl -s \"https://657a-144-124-199-178.ngrok-free.app/api/groups\" -H \"Authorization: Bearer test\")"
+    ],
+    "env": {
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.7"
+    }
+  }
+}

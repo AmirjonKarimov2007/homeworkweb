@@ -1,0 +1,36 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  overflow-x: hidden;
+}
+
+* {
+  max-width: 100%;
+}
+
+.bg-hero {
+  background:
+    radial-gradient(1200px 600px at 8% -10%, #eaf7f1 0%, rgba(255,255,255,0) 55%),
+    radial-gradient(900px 500px at 92% -15%, #dff0e8 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #ffffff 0%, #f1f8f4 100%);
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-card border border-emerald-200/60;
+}
+
+.sidebar-gradient {
+  background: linear-gradient(180deg, #0f6b46 0%, #0b4a31 100%);
+}

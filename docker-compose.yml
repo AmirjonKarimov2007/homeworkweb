@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: homeworkweb-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/homeworkweb
+      - CORS_ORIGINS=https://alwaysdata.com,http://alwaysdata.com
+      - FRONTEND_URL=https://alwaysdata.com
+      - BACKEND_URL=https://api.alwaysdata.com
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-your-super-secret-refresh-key-change-in-production}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - BOT_INTERNAL_TOKEN=${BOT_INTERNAL_TOKEN}
+      - ADMIN_ID=${ADMIN_ID}
+      - APP_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend/uploads:/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: homeworkweb-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=https://api.alwaysdata.com/api
+      - NEXT_PUBLIC_BOT_INTERNAL_TOKEN=${BOT_INTERNAL_TOKEN}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: homeworkweb-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=homeworkweb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: homeworkweb-redis
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -1,0 +1,51 @@
+# Backend
+backend/.venv
+backend/__pycache__
+backend/*.pyc
+backend/.pytest_cache
+backend/bot.log
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Frontend
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/.turbo
+frontend/dist
+
+# Bot
+bot/.venv
+bot/__pycache__
+bot/bot.log
+
+# Logs
+logs/
+*.log
+
+# Environment (use .env.production on server)
+.env
+backend/.env
+frontend/.env.local
+bot/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docs
+docs/
+README.md
+CLAUDE.md
+DEPLOYMENT.md
