@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +32,7 @@ import { toast } from "@/components/ui/use-toast";
 
 type Tab = "dashboard" | "notify" | "homework" | "groups";
 
-export default function WebappPage() {
+function WebappContent() {
   const searchParams = useSearchParams();
   const telegramId = parseInt(searchParams.get("telegram_id") || "0");
   const action = searchParams.get("action") || "dashboard";
@@ -547,5 +547,16 @@ export default function WebappPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function WebappPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4" />
+      <p className="text-gray-600">Yuklanmoqda...</p>
+    </div>}>
+      <WebappContent />
+    </Suspense>
   );
 }

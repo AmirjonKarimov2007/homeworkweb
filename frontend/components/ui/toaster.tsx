@@ -1,10 +1,11 @@
 "use client";
 
 import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription } from "@/components/ui/toast";
-import { useToaster } from "@/components/ui/use-toast";
+import { useToast } from "@/components/ui/use-toast";
+import type { ToastProps } from "@/components/ui/use-toast";
 
 function ToastList() {
-  const { toasts, removeToast } = useToaster();
+  const { toasts, removeToast } = useToast();
 
   return (
     <ToastProvider>

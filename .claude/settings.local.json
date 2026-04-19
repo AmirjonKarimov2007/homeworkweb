@@ -16,7 +16,14 @@
       "Bash(python -m py_compile main.py handlers/start.py handlers/admin.py)",
       "Bash(python -m compileall -q .)",
       "Bash(python -m py_compile handlers/start.py)",
-      "Bash(curl -s \"https://657a-144-124-199-178.ngrok-free.app/api/groups\" -H \"Authorization: Bearer test\")"
+      "Bash(curl -s \"https://657a-144-124-199-178.ngrok-free.app/api/groups\" -H \"Authorization: Bearer test\")",
+      "Bash(npm run:*)",
+      "Bash(curl -I https://kid-spam-internal-cos.trycloudflare.com/api/health)",
+      "Bash(rm -rf .next node_modules package-lock.json)",
+      "Bash(npm install:*)",
+      "Bash(du -sh C:Usersalfatech.uzDesktophomeworkwebfrontend/*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)"
     ],
     "env": {
       "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",

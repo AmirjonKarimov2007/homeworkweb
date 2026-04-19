@@ -10,7 +10,8 @@ import { getLastPath, getUser, saveAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Lock, Phone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 
 const schema = z.object({
   login: z.string().min(3),
@@ -31,27 +32,25 @@ function unwrapLoginPayload(payload: any) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    setValue,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
-  useEffect(() => {
-    const user = getUser();
-    if (user) {
-      const last = getLastPath() || "/dashboard";
-      router.replace(last);
-    }
-  }, [router]);
-
-  const onSubmit = async (data: FormData) => {
+  const doLogin = useCallback(async (login: string, password: string) => {
     try {
       setError(null);
-      const res = await api.post("/auth/login", data);
+      setIsSubmitting(true);
+      console.log("Login attempt:", { login, password });
+      const res = await api.post("/auth/login", { login, password });
+      console.log("Login response:", res.status, res.data);
       const payload = unwrapLoginPayload(res.data);
 
       if (!payload) {
@@ -63,14 +62,44 @@ export default function LoginPage() {
       const last = getLastPath() || "/dashboard";
       router.replace(last);
     } catch (err: any) {
+      console.error("Login error:", err?.response?.data || err);
       if (err?.response?.status === 401) {
-        setError("Login yoki parol noto‘g‘ri.");
+        setError("Login yoki parol noto'g'ri.");
       } else if (err?.response?.status === 403) {
         setError(err?.response?.data?.detail || "Kirishga ruxsat berilmadi.");
       } else {
-        setError("Server bilan bog‘lanishda xatolik. Qayta urinib ko‘ring.");
+        setError("Server bilan bog'lanishda xatolik. Qayta urinib ko'ring.");
       }
+    } finally {
+      setIsSubmitting(false);
     }
+  }, [router]);
+
+  // Auto-login from URL params
+  useEffect(() => {
+    const user = getUser();
+    if (user) {
+      const last = getLastPath() || "/dashboard";
+      router.replace(last);
+      return;
+    }
+
+    const urlLogin = searchParams.get("login");
+    const urlPassword = searchParams.get("password");
+
+    if (urlLogin && urlPassword) {
+      // Trim any leading/trailing spaces from URL decoded values
+      const cleanLogin = urlLogin.trim();
+      const cleanPassword = urlPassword.trim();
+      console.log("Auto-login from URL:", { urlLogin, urlPassword, cleanLogin, cleanPassword });
+      setValue("login", cleanLogin);
+      setValue("password", cleanPassword);
+      doLogin(cleanLogin, cleanPassword);
+    }
+  }, [searchParams, router, setValue, doLogin]);
+
+  const onSubmit = async (data: FormData) => {
+    await doLogin(data.login, data.password);
   };
 
   return (

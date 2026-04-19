@@ -2,21 +2,21 @@
 
 import * as React from "react";
 
-type ToastProps = {
+export type ToastProps = {
   title?: string;
   description?: string;
   variant?: "default" | "destructive";
 };
 
-type ToasterContextType = {
+type ToastContextType = {
   toasts: ToastProps[];
   addToast: (toast: ToastProps) => void;
   removeToast: (index: number) => void;
 };
 
-const ToasterContext = React.createContext<ToasterContextType | null>(null);
+const ToastContext = React.createContext<ToastContextType | null>(null);
 
-// Global reference for the toast function
+// Global reference for toast function
 let addToastGlobal: ((toast: ToastProps) => void) | null = null;
 
 export function ToastProviderRoot({ children }: { children: React.ReactNode }) {
@@ -30,7 +30,7 @@ export function ToastProviderRoot({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Store the addToast function globally
+  // Store addToast function globally
   React.useEffect(() => {
     addToastGlobal = addToast;
     return () => {
@@ -39,15 +39,15 @@ export function ToastProviderRoot({ children }: { children: React.ReactNode }) {
   }, [addToast]);
 
   return (
-    <ToasterContext.Provider value={{ toasts, addToast, removeToast }}>
+    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-    </ToasterContext.Provider>
+    </ToastContext.Provider>
   );
 }
 
-export function useToaster() {
-  const ctx = React.useContext(ToasterContext);
-  if (!ctx) throw new Error("useToaster must be used within ToastProviderRoot");
+export function useToast() {
+  const ctx = React.useContext(ToastContext);
+  if (!ctx) throw new Error("useToast must be used within ToastProviderRoot");
   return ctx;
 }
 
