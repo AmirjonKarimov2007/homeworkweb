@@ -13,9 +13,8 @@ if str(BASE_DIR) not in sys.path:
 from app.db.session import AsyncSessionLocal
 from app.db.init import init_db
 from app.core.security import hash_password
-from app.utils.enums import Role, LeadStatus, MaterialType, PaymentStatus
+from app.utils.enums import Role, MaterialType, PaymentStatus
 from app.models.user import User
-from app.models.lead import Lead
 from app.models.group import Group, StudentGroupEnrollment
 from app.models.lesson import Lesson
 from app.models.homework import HomeworkTask

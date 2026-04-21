@@ -17,6 +17,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 from bot.config import BOT_TOKEN, POLLING, WEBHOOK_URL, ADMIN_IDS, BACKEND_URL
+from bot.services.database import db_service
 from bot.handlers import start, homework, payments, materials, notifications, profile, help, groups, admin
 from bot.jobs.notifications import admin_notification_worker
 import httpx

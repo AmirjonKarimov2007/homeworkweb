@@ -1,11 +1,15 @@
-﻿from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+﻿from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
 def main_menu():
     keyboard = [
-        [KeyboardButton(text="My Groups"), KeyboardButton(text="Homework")],
-        [KeyboardButton(text="Payments"), KeyboardButton(text="Materials")],
-        [KeyboardButton(text="Notifications"), KeyboardButton(text="Profile")],
-        [KeyboardButton(text="Help")],
+        [KeyboardButton(text="📚 Mening guruhlarim")],
+        [KeyboardButton(text="📝 Uy ishi")],
+        [KeyboardButton(text="💰 To'lovlar")],
+        [KeyboardButton(text="📁 Materiallar")],
+        [KeyboardButton(text="🔔 Bildirishnomalar")],
+        [KeyboardButton(text="� Profil")],
+        [KeyboardButton(text="❓ Yordam")],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

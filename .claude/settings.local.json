@@ -23,7 +23,15 @@
       "Bash(npm install:*)",
       "Bash(du -sh C:Usersalfatech.uzDesktophomeworkwebfrontend/*)",
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python test_db_connection.py)",
+      "Bash(python scripts/seed.py)",
+      "Bash(python -c \":*)",
+      "Bash(python test_db.py)",
+      "Bash(python test_bot_db.py)",
+      "Bash(python test_db_simple.py)",
+      "Bash(python final_test.py)"
     ],
     "env": {
       "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",

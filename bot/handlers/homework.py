@@ -1,68 +1,172 @@
 ﻿from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.filters import CommandStart, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.fsm.context import FSMContext
-from pathlib import Path
-from bot.services.api import api_client
-from bot.states.homework import HomeworkStates
+from bot.services.database import db_service
+from bot.utils.enums import Role
 
 router = Router()
-TMP_DIR = Path("bot/tmp")
-TMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@router.message(F.text == "Homework")
-async def homework_menu(message: Message, state: FSMContext):
-    resp = await api_client.homework_list(message.from_user.id)
-    if not resp.get("success") or not resp.get("data"):
-        await message.answer("No homework found.")
-        return
+@router.callback_query(F.data.startswith("submit_hw_"))
+async def submit_homework_start(callback: CallbackQuery):
+    """Start homework submission process"""
+    homework_id = int(callback.data.split("_")[2])
 
-    builder = InlineKeyboardBuilder()
-    for item in resp["data"]:
-        builder.button(text=item["title"], callback_data=f"hw:{item['id']}")
-    builder.adjust(1)
-    await message.answer("Select homework:", reply_markup=builder.as_markup())
-    await state.set_state(HomeworkStates.choosing)
+    await callback.message.answer(
+        "Uy ishingizni matn shaklida yuboring.\n\n"
+        "⚠️ E'tibor bering: Fayl, rasm yoki boshqa formatdagi materiallar qabul qilinmaydi."
+    )
 
+    # Save current state for text input
+    from bot.keyboards.inline import save_homework_state
+    await save_homework_state(callback.from_user.id, homework_id)
 
-@router.callback_query(F.data.startswith("hw:"))
-async def homework_select(callback: CallbackQuery, state: FSMContext):
-    homework_id = int(callback.data.split(":")[1])
-    await state.update_data(homework_id=homework_id)
-    await state.set_state(HomeworkStates.submitting)
-    await callback.message.answer("Send your homework text and/or file in one message.")
     await callback.answer()
 
 
-@router.message(HomeworkStates.submitting)
-async def homework_submit(message: Message, state: FSMContext):
-    data = await state.get_data()
-    homework_id = data.get("homework_id")
-    if not homework_id:
-        await message.answer("Please select homework again.")
-        await state.clear()
+@router.message(F.text)
+async def handle_homework_text(message: Message):
+    """Handle homework text submission"""
+    # Get current state
+    from bot.keyboards.inline import get_homework_state
+
+    state = await get_homework_state(message.from_user.id)
+    if not state:
+        await message.answer("Iltimos, avval uy ishini tanlang.")
         return
 
-    text = message.text
-    file_path = None
+    homework_id = state["homework_id"]
+    telegram_id = message.from_user.id
 
-    if message.document:
-        file = message.document
-        file_path = TMP_DIR / file.file_name
-        await message.bot.download(file, destination=file_path)
-    elif message.photo:
-        photo = message.photo[-1]
-        file_path = TMP_DIR / f"photo_{photo.file_id}.jpg"
-        await message.bot.download(photo, destination=file_path)
+    # Submit homework
+    success = await db_service.submit_homework(homework_id, telegram_id, message.text)
 
-    resp = await api_client.submit_homework(homework_id, message.from_user.id, text, str(file_path) if file_path else None)
-    if resp.get("success"):
-        await message.answer("Homework submitted successfully.")
+    if success:
+        await message.answer(
+            "✅ Uy ishingiz muvaffaqiyatli topshirildi!\n\n"
+            "O'qituvchingiz javobini kutib turing."
+        )
     else:
-        await message.answer("Failed to submit homework.")
+        await message.answer(
+            "❌ Uy ishini topshirishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring."
+        )
 
-    if file_path and file_path.exists():
-        file_path.unlink(missing_ok=True)
+    # Clear state
+    from bot.keyboards.inline import clear_homework_state
+    await clear_homework_state(message.from_user.id)
 
-    await state.clear()
+
+@router.callback_query(F.data.startswith("view_hw_"))
+async def view_homework_details(callback: CallbackQuery):
+    """View homework details"""
+    homework_id = int(callback.data.split("_")[2])
+
+    # Get homework details
+    homework = await db_service.get_homework_by_id(homework_id)
+    if not homework:
+        await callback.message.answer("Uy ishi topilmadi.")
+        await callback.answer()
+        return
+
+    # Get user's submissions for this homework
+    submissions = await db_service.get_homework_submissions(homework_id)
+
+    # Show homework details
+    homework_info = f"""
+**Uy Ishi - {homework.title}**
+
+📝 Tavsifi: {homework.description or "Tavsif berilmagan"}
+
+📅 Muddati: {homework.due_date.strftime("%d.%m.%Y %H:%M") if homework.due_date else "Noma'lum"}
+
+📊 Bajarish holati: {homework.status.value}
+
+📤 Yaratilgan vaqti: {homework.created_at.strftime("%d.%m.%Y %H:%M")}
+"""
+
+    if submissions:
+        homework_info += "\n\n**Topshirgan talabalar:**\n"
+        for submission in submissions[:5]:  # Show first 5 submissions
+            status_emoji = "✅" if submission["status"] == "completed" else "⏳"
+            homework_info += f"\n{status_emoji} {submission['user_name']} - {submission['submitted_at'].strftime('%d.%m.%Y %H:%M')}"
+
+        if len(submissions) > 5:
+            homework_info += f"\n\n... va yana {len(submissions) - 5} nafar talaba"
+
+    # Add back button
+    if homework.lesson:
+        builder = InlineKeyboardBuilder()
+        builder.add(InlineKeyboardButton(
+            text="🔙 Orqaga",
+            callback_data=f"group_{homework.lesson.group.id}"
+        ))
+        builder.adjust(1)
+
+        await callback.message.edit_text(homework_info, reply_markup=builder.as_markup())
+    else:
+        await callback.message.answer(homework_info)
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("view_hw_submissions_"))
+async def view_all_homework_submissions(callback: CallbackQuery):
+    """View all submissions for a homework"""
+    homework_id = int(callback.data.split("_")[3])
+
+    # Get all submissions
+    submissions = await db_service.get_homework_submissions(homework_id)
+
+    if not submissions:
+        await callback.message.answer("Ushbu uy uchun hech qanday topshiriq topilmagan.")
+        await callback.answer()
+        return
+
+    # Create pagination for submissions
+    page_size = 10
+    total_pages = (len(submissions) + page_size - 1) // page_size
+    page = 1
+
+    text = f"""
+**Uy Ishi Topshiruvchilar - {len(submissions)} ta**
+
+"""
+
+    # Add submissions for current page
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    for submission in submissions[start_idx:end_idx]:
+        status_emoji = "✅" if submission["status"] == "completed" else "⏳"
+        text += f"\n{status_emoji} **{submission['user_name']}**\n"
+        text += f"   • Topshirilgan: {submission['submitted_at'].strftime('%d.%m.%Y %H:%M')}\n"
+        text += f"   • Holat: {submission['status']}\n"
+        text += f"   • Text: {submission['text'][:100]}{'...' if len(submission['text']) > 100 else ''}\n"
+
+    # Add navigation buttons
+    builder = InlineKeyboardBuilder()
+
+    if page > 1:
+        builder.add(InlineKeyboardButton(
+            text="⬅️ Oldingi",
+            callback_data=f"view_hw_submissions_{homework_id}_page_{page - 1}"
+        ))
+
+    if page < total_pages:
+        builder.add(InlineKeyboardButton(
+            text="Keyingi ➡️",
+            callback_data=f"view_hw_submissions_{homework_id}_page_{page + 1}"
+        ))
+
+    builder.add(InlineKeyboardButton(
+        text="🔙 Orqaga",
+        callback_data=f"view_hw_{homework_id}"
+    ))
+
+    builder.adjust(2)
+
+    await callback.message.edit_text(
+        text + f"\n\nSahifa {page}/{total_pages}",
+        reply_markup=builder.as_markup()
+    )
+    await callback.answer()
