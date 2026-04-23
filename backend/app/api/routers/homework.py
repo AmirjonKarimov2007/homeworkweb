@@ -84,17 +84,18 @@ async def create_homework(
         if not group or group.primary_teacher_id != user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
 
-    existing_result = await session.execute(
-        select(HomeworkTask).where(HomeworkTask.lesson_id == payload.lesson_id)
-    )
-    existing = existing_result.scalar_one_or_none()
-    if existing:
-        for field, value in payload.model_dump(exclude_unset=True).items():
-            setattr(existing, field, value)
-        session.add(existing)
-        await session.commit()
-        await session.refresh(existing)
-        await log_action(session, user.id, "update_homework", "homework", existing.id)
+    # Create new homework
+    homework = HomeworkTask(**payload.model_dump(), created_by=user.id)
+    session.add(homework)
+    await session.commit()
+    await session.refresh(homework)
+    await log_action(session, user.id, "create_homework", "homework", homework.id)
+
+    # Get lesson for notifications
+    lesson_result = await session.execute(select(Lesson).where(Lesson.id == payload.lesson_id))
+    lesson = lesson_result.scalar_one_or_none()
+
+    if lesson:
         enroll_result = await session.execute(
             select(StudentGroupEnrollment.student_id).where(
                 StudentGroupEnrollment.group_id == lesson.group_id,
@@ -105,31 +106,11 @@ async def create_homework(
         await create_notifications_bulk(
             session,
             student_ids,
-            title=f"Uyga vazifa yangilandi: {existing.title}",
-            body=existing.instructions,
+            title=f"Yangi uyga vazifa: {homework.title}",
+            body=homework.instructions,
             channel=NotificationChannel.WEB,
         )
-        return success(HomeworkOut(**existing.__dict__))
 
-    homework = HomeworkTask(**payload.model_dump(), created_by=user.id)
-    session.add(homework)
-    await session.commit()
-    await session.refresh(homework)
-    await log_action(session, user.id, "create_homework", "homework", homework.id)
-    enroll_result = await session.execute(
-        select(StudentGroupEnrollment.student_id).where(
-            StudentGroupEnrollment.group_id == lesson.group_id,
-            StudentGroupEnrollment.status == EnrollmentStatus.ACTIVE,
-        )
-    )
-    student_ids = [row[0] for row in enroll_result.all()]
-    await create_notifications_bulk(
-        session,
-        student_ids,
-        title=f"Yangi uyga vazifa: {homework.title}",
-        body=homework.instructions,
-        channel=NotificationChannel.WEB,
-    )
     return success(HomeworkOut(**homework.__dict__))
 
 
@@ -374,3 +355,58 @@ async def submit_homework_web(
 
     await log_action(session, user.id, "submit_homework", "homework", homework_id)
     return success(_submission_out(submission))
+
+
+@router.put("/{homework_id}")
+async def update_homework(
+    homework_id: int,
+    payload: HomeworkCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER)),
+):
+    # Get existing homework
+    result = await session.execute(select(HomeworkTask).where(HomeworkTask.id == homework_id))
+    homework = result.scalar_one_or_none()
+    if not homework:
+        raise HTTPException(status_code=404, detail="Homework not found")
+
+    # Check permissions - verify teacher owns the OLD lesson
+    if user.role == Role.TEACHER:
+        old_lesson_result = await session.execute(select(Lesson).where(Lesson.id == homework.lesson_id))
+        old_lesson = old_lesson_result.scalar_one_or_none()
+        if old_lesson:
+            old_group_result = await session.execute(select(Group).where(Group.id == old_lesson.group_id))
+            old_group = old_group_result.scalar_one_or_none()
+            if not old_group or old_group.primary_teacher_id != user.id:
+                raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Update homework fields
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(homework, field, value)
+
+    session.add(homework)
+    await session.commit()
+    await session.refresh(homework)
+    await log_action(session, user.id, "update_homework", "homework", homework.id)
+
+    # Get lesson for notifications
+    lesson_result = await session.execute(select(Lesson).where(Lesson.id == homework.lesson_id))
+    lesson = lesson_result.scalar_one_or_none()
+
+    if lesson:
+        enroll_result = await session.execute(
+            select(StudentGroupEnrollment.student_id).where(
+                StudentGroupEnrollment.group_id == lesson.group_id,
+                StudentGroupEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        student_ids = [row[0] for row in enroll_result.all()]
+        await create_notifications_bulk(
+            session,
+            student_ids,
+            title=f"Uyga vazifa yangilandi: {homework.title}",
+            body=homework.instructions,
+            channel=NotificationChannel.WEB,
+        )
+
+    return success(HomeworkOut(**homework.__dict__))

@@ -13,7 +13,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={cairo.className}>
-      <body>
+      <body suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

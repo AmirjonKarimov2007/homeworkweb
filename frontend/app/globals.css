@@ -34,3 +34,10 @@ body {
 .sidebar-gradient {
   background: linear-gradient(180deg, #0f6b46 0%, #0b4a31 100%);
 }
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
