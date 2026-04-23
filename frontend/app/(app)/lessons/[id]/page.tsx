@@ -143,19 +143,31 @@ export default function LessonDetailPage() {
   }, [homework?.id]);
 
   const createOrUpdateHomework = useMutation({
-    mutationFn: async () =>
-      api.post("/homework", {
-        lesson_id: lessonId,
-        title: hwTitle,
-        instructions: hwInstructions || null,
-        due_date: hwDue ? new Date(hwDue).toISOString() : null,
-      }),
+    mutationFn: async () => {
+      if (homework) {
+        // UPDATE existing homework
+        return api.put(`/homework/${homework.id}`, {
+          lesson_id: lessonId,
+          title: hwTitle,
+          instructions: hwInstructions || null,
+          due_date: hwDue ? new Date(hwDue).toISOString() : null,
+        });
+      } else {
+        // CREATE new homework
+        return api.post("/homework", {
+          lesson_id: lessonId,
+          title: hwTitle,
+          instructions: hwInstructions || null,
+          due_date: hwDue ? new Date(hwDue).toISOString() : null,
+        });
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lesson-homework", lessonId] });
-      addToast({ title: "Uyga vazifa saqlandi", description: "Uyga vazifa yangilandi." });
+      addToast({ title: "✅ Saqlandi", description: homework ? "Uyga vazifa yangilandi" : "Uyga vazifa yaratildi" });
     },
     onError: (err: any) => {
-      addToast({ title: "Xatolik", description: err?.response?.data?.detail || "Uyga vazifa saqlanmadi." });
+      addToast({ title: "❌ Xatolik", description: err?.response?.data?.detail || "Uyga vazifa saqlanmadi." });
     },
   });
 
