@@ -62,6 +62,7 @@ export default function LessonDetailPage() {
   const [hwTitle, setHwTitle] = useState("");
   const [hwInstructions, setHwInstructions] = useState("");
   const [hwDue, setHwDue] = useState("");
+  const [hwEditMode, setHwEditMode] = useState(false);
   const [lessonFile, setLessonFile] = useState<File | null>(null);
   const [homeworkFile, setHomeworkFile] = useState<File | null>(null);
   const [submissionText, setSubmissionText] = useState("");
@@ -163,6 +164,7 @@ export default function LessonDetailPage() {
       }
     },
     onSuccess: () => {
+      setHwEditMode(false);
       qc.invalidateQueries({ queryKey: ["lesson-homework", lessonId] });
       addToast({ title: "✅ Saqlandi", description: homework ? "Uyga vazifa yangilandi" : "Uyga vazifa yaratildi" });
     },
@@ -335,11 +337,23 @@ export default function LessonDetailPage() {
       <div className="card p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-medium text-emerald-900">Uyga vazifa</div>
-          {isStudent && <Badge className={status.tone}>{status.label}</Badge>}
+          <div className="flex items-center gap-2">
+            {isStudent && <Badge className={status.tone}>{status.label}</Badge>}
+            {canEdit && homework && !hwEditMode && (
+              <Button size="sm" onClick={() => setHwEditMode(true)}>
+                ✏️ Tahrirlash
+              </Button>
+            )}
+            {canEdit && hwEditMode && (
+              <Button size="sm" variant="outline" onClick={() => setHwEditMode(false)}>
+                ✕ Bekor qilish
+              </Button>
+            )}
+          </div>
         </div>
 
-        {canEdit && (
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+        {canEdit && hwEditMode && (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3 p-3 bg-emerald-50 rounded-lg">
             <Input placeholder="Sarlavha" value={hwTitle} onChange={(e) => setHwTitle(e.target.value)} />
             <Input placeholder="Ko'rsatma (matn)" value={hwInstructions} onChange={(e) => setHwInstructions(e.target.value)} />
             <Input type="datetime-local" value={hwDue} onChange={(e) => setHwDue(e.target.value)} />
@@ -354,8 +368,8 @@ export default function LessonDetailPage() {
           </div>
         )}
 
-        {canEdit && (
-          <div className="flex flex-col gap-2 md:flex-row">
+        {canEdit && hwEditMode && (
+          <div className="flex flex-col gap-2 md:flex-row p-3 bg-emerald-50 rounded-lg">
             <Input type="file" onChange={(e) => setHomeworkFile(e.target.files?.[0] || null)} />
             <Button disabled={!homeworkFile || !homework} onClick={() => uploadHomeworkFile.mutate()}>
               Foto/fayl biriktirish
@@ -368,8 +382,9 @@ export default function LessonDetailPage() {
                 }
                 createOrUpdateHomework.mutate();
               }}
+              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {homework ? "Uyga vazifani yangilash" : "Uyga vazifa yaratish"}
+              {homework ? "Yangilash" : "Yaratish"}
             </Button>
           </div>
         )}

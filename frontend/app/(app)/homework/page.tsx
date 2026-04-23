@@ -159,8 +159,8 @@ export default function HomeworkPage() {
             <DialogHeader>
               <DialogTitle>{editMode ? "Uyga vazifani yangilash" : "Yangi uyga vazifa yaratish"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              {editMode && (
+            {editMode ? (
+              <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                   <div className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,74 +169,78 @@ export default function HomeworkPage() {
                     <span className="text-sm font-medium text-blue-800">Uyga vazifa №{editingId} ni yangilash</span>
                   </div>
                 </div>
-              )}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Sarlavha</label>
-                <Input
-                  placeholder="Misol: Algebra 1-bob"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Dars ID</label>
-                <Input
-                  placeholder="Raqam kiriting"
-                  type="number"
-                  value={lessonId}
-                  onChange={(e) => setLessonId(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Ko‘rsatma (matn)</label>
-                <textarea
-                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Vazifa tafsilotlari..."
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Tugash vaqti (ixtiyoriy)</label>
-                <Input
-                  type="datetime-local"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button
-                  onClick={() => {
-                    console.log("Form yuborildi:", { title, lessonId, editMode, editingId });
-                    if (!title || !lessonId) {
-                      addToast({ title: "To‘ldiring", description: "Sarlavha va dars ID kerak." });
-                      return;
-                    }
-                    if (editMode) {
-                      update.mutate();
-                    } else {
-                      create.mutate();
-                    }
-                  }}
-                  className="flex-1"
-                  disabled={create.isPending || update.isPending}
-                >
-                  {create.isPending || update.isPending ? "Kutilmoqda..." : (editMode ? "Yangilash" : "Saqlash")}
-                </Button>
-                {editMode && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Sarlavha</label>
+                  <Input
+                    placeholder="Misol: Algebra 1-bob"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Dars ID</label>
+                  <Input
+                    placeholder="Raqam kiriting"
+                    type="number"
+                    value={lessonId}
+                    onChange={(e) => setLessonId(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Ko’rsatma (matn)</label>
+                  <textarea
+                    className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Vazifa tafsilotlari..."
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Tugash vaqti (ixtiyoriy)</label>
+                  <Input
+                    type="datetime-local"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
                   <Button
-                    variant="outline"
                     onClick={() => {
-                      clearForm();
-                      setOpen(false);
+                      console.log("Form yuborildi:", { title, lessonId, editMode, editingId });
+                      if (!title || !lessonId) {
+                        addToast({ title: "To’ldiring", description: "Sarlavha va dars ID kerak." });
+                        return;
+                      }
+                      if (editMode) {
+                        update.mutate();
+                      } else {
+                        create.mutate();
+                      }
                     }}
-                    className="px-6"
+                    className="flex-1"
+                    disabled={create.isPending || update.isPending}
                   >
-                    Yopish
+                    {create.isPending || update.isPending ? "Kutilmoqda..." : (editMode ? "Yangilash" : "Saqlash")}
                   </Button>
-                )}
+                  {editMode && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        clearForm();
+                        setOpen(false);
+                      }}
+                      className="px-6"
+                    >
+                      Yopish
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-slate-600 mb-4">Yangi uyga vazifa qo’shish uchun ro’yxatdan birini tanlang va "Tahrirlash" tugmasini bosing</p>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
