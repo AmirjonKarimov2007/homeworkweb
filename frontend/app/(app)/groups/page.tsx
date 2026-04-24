@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,22 @@ export default function GroupsPage() {
   const [paymentRequired, setPaymentRequired] = useState(true);
   const [courseId, setCourseId] = useState("");
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSchedule, setEditSchedule] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editDurationMonths, setEditDurationMonths] = useState("");
+  const [editMonthlyFee, setEditMonthlyFee] = useState("");
+  const [editPaymentDay, setEditPaymentDay] = useState("5");
+  const [editPaymentRequired, setEditPaymentRequired] = useState(true);
+  const [editCourseId, setEditCourseId] = useState("");
+
+  const capitalize = (str: string) => {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
 
   const { data } = useQuery({
     queryKey: ["groups"],
@@ -91,6 +108,37 @@ export default function GroupsPage() {
     }
   };
 
+  const handleEditCourseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedCourseId = e.target.value;
+    setEditCourseId(selectedCourseId);
+    if (selectedCourseId) {
+      const course = courseItems.find((c: any) => c.id === Number(selectedCourseId));
+      if (course) {
+        setEditMonthlyFee(String(course.monthly_fee));
+        if (course.duration_months) {
+          setEditDurationMonths(String(course.duration_months));
+        }
+      }
+    } else {
+      setEditMonthlyFee("");
+      setEditDurationMonths("");
+    }
+  };
+
+  useEffect(() => {
+    if (editing) {
+      setEditName(editing.name || "");
+      setEditSchedule(editing.schedule_time || "");
+      setEditStartDate(editing.start_date || "");
+      setEditEndDate(editing.end_date || "");
+      setEditDurationMonths(editing.duration_months?.toString() || "");
+      setEditMonthlyFee(editing.monthly_fee?.toString() || "");
+      setEditPaymentDay(editing.payment_day?.toString() || "5");
+      setEditPaymentRequired(editing.is_payment_required ?? true);
+      setEditCourseId(editing.course_id?.toString() || "");
+    }
+  }, [editing]);
+
   const removeGroup = useMutation({
     mutationFn: async (groupId: number) => api.delete(`/groups/${groupId}`),
     onSuccess: () => {
@@ -99,6 +147,33 @@ export default function GroupsPage() {
     },
     onError: (err: any) => {
       addToast({ title: "Xatolik", description: err?.response?.data?.detail || "Guruh o'chirilmadi." });
+    },
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: async () => {
+      if (!editing) return;
+      await api.patch(`/groups/${editing.id}`, {
+        name: editName || editing.name,
+        schedule_time: editSchedule || editing.schedule_time,
+        start_date: editStartDate || editing.start_date,
+        end_date: editEndDate || editing.end_date,
+        duration_months: editDurationMonths ? Number(editDurationMonths) : editing.duration_months,
+        monthly_fee: editMonthlyFee ? Number(editMonthlyFee) : editing.monthly_fee,
+        payment_day: editPaymentDay ? Number(editPaymentDay) : editing.payment_day,
+        is_payment_required: editPaymentRequired,
+        course_id: Number(editCourseId) || editing.course_id,
+      });
+    },
+    onSuccess: () => {
+      setEditOpen(false);
+      setEditing(null);
+      setEditPaymentDay("5");
+      qc.invalidateQueries({ queryKey: ["groups"] });
+      addToast({ title: "Yangilandi", description: "Guruh ma'lumotlari yangilandi." });
+    },
+    onError: (err: any) => {
+      addToast({ title: "Xatolik", description: err?.response?.data?.detail || "Guruh yangilanmadi." });
     },
   });
 
@@ -172,6 +247,62 @@ export default function GroupsPage() {
         </Dialog>
       </div>
 
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Guruhni tahrirlash</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Guruh nomi" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            <select
+              className="w-full p-2 border border-gray-300 rounded-md"
+              value={editCourseId}
+              onChange={handleEditCourseChange}
+            >
+              <option value="">Kursni tanlang</option>
+              {courseItems.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} - {formatMoney(c.monthly_fee)} so'm {c.duration_months ? `(${c.duration_months} oy)` : ""}
+                </option>
+              ))}
+            </select>
+            <Input placeholder="Jadval (masalan 19:00)" value={editSchedule} onChange={(e) => setEditSchedule(e.target.value)} />
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <Input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} />
+              <Input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} />
+              <Input type="number" placeholder="Necha oy" value={editDurationMonths} onChange={(e) => setEditDurationMonths(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <Input
+                placeholder="Oylik tolov"
+                value={formatMoney(editMonthlyFee)}
+                onChange={(e) => setEditMonthlyFee(parseMoney(e.target.value))}
+              />
+              <Input type="number" placeholder="Tolov kuni (1-31)" value={editPaymentDay} onChange={(e) => setEditPaymentDay(e.target.value)} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-emerald-800">
+              <input type="checkbox" checked={editPaymentRequired} onChange={(e) => setEditPaymentRequired(e.target.checked)} />
+              Tolov talab qilinadi
+            </label>
+            <Button
+              onClick={() => {
+                if (!editName) {
+                  addToast({ title: "Guruh nomini kiriting", description: "Bosh nom bilan saqlab bolmaydi." });
+                  return;
+                }
+                if (!editCourseId) {
+                  addToast({ title: "Kursni tanlang", description: "Kurs tanlash majburiy." });
+                  return;
+                }
+                saveEdit.mutate();
+              }}
+            >
+              Saqlash
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -187,26 +318,38 @@ export default function GroupsPage() {
             <TableRow key={g.id}>
               <TableCell>
                 <Link className="text-emerald-700 hover:underline" href={`/groups/${g.id}`}>
-                  {g.name}
+                  {capitalize(g.name)}
                 </Link>
               </TableCell>
-              <TableCell>{g.course?.name || "-"}</TableCell>
+              <TableCell>{capitalize(g.course?.name || "-")}</TableCell>
               <TableCell>{g.schedule_time || "-"}</TableCell>
               <TableCell>
                 {g.start_date ? `${g.start_date}  ${g.end_date || "-"}` : "-"}
               </TableCell>
               <TableCell>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => {
-                    if (confirm("Guruhni o'chirmoqchimisiz?")) {
-                      removeGroup.mutate(g.id);
-                    }
-                  }}
-                >
-                  O'chirish
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditing(g);
+                      setEditOpen(true);
+                    }}
+                  >
+                    Tahrirlash
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      if (confirm("Guruhni o'chirmoqchimisiz?")) {
+                        removeGroup.mutate(g.id);
+                      }
+                    }}
+                  >
+                    O'chirish
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}

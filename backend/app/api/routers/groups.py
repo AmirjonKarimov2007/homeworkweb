@@ -280,3 +280,26 @@ async def group_students(
         {"id": s.id, "full_name": s.full_name, "phone": s.phone, "email": s.email}
         for s in students
     ])
+
+
+@router.get("/{group_id}/enrollment")
+async def check_enrollment(
+    group_id: int,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Check if current user is enrolled in the group"""
+    if user.role == Role.STUDENT:
+        result = await session.execute(
+            select(StudentGroupEnrollment)
+            .where(
+                StudentGroupEnrollment.group_id == group_id,
+                StudentGroupEnrollment.student_id == user.id,
+                StudentGroupEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        is_enrolled = result.scalar_one_or_none() is not None
+        return success({"is_enrolled": is_enrolled, "user_id": user.id, "group_id": group_id})
+    else:
+        # For teachers and admins, they can access any group
+        return success({"is_enrolled": True, "user_id": user.id, "group_id": group_id})

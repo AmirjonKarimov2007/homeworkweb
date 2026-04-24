@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000"
 
     DATABASE_URL: str = Field(
-        "postgresql+asyncpg://postgres:12345678@localhost:5432/homeworkbot",
+        "postgresql+asyncpg://postgres:12345678@localhost:5432/homeworkweb",
         description="Async database URL",
     )
     DB_POOL_SIZE: int = 20

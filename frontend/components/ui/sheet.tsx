@@ -27,6 +27,7 @@ const SheetContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
+    <SheetPrimitive.Title className="sr-only">Menu</SheetPrimitive.Title>
     <SheetPrimitive.Content
       ref={ref}
       className={cn(

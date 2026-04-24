@@ -66,6 +66,96 @@ async def list_lessons(
     })
 
 
+@router.get("/student")
+async def list_student_lessons(
+    group_id: int | None = None,
+    page: int = 1,
+    size: int = 20,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if user.role != Role.STUDENT:
+        raise HTTPException(status_code=403, detail="Only students can access this endpoint")
+
+    stmt = select(Lesson)
+
+    if group_id:
+        enrollment = await session.execute(
+            select(StudentGroupEnrollment).where(
+                StudentGroupEnrollment.group_id == group_id,
+                StudentGroupEnrollment.student_id == user.id,
+                StudentGroupEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        if not enrollment.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Student not enrolled in this group")
+        stmt = stmt.where(Lesson.group_id == group_id)
+
+        can_access = await can_student_access_new_lessons(session, user.id, group_id)
+        if not can_access:
+            latest = await session.execute(
+                select(Payment)
+                .where(Payment.student_id == user.id, Payment.group_id == group_id)
+                .order_by(Payment.billing_year.desc(), Payment.billing_month.desc())
+                .limit(1)
+            )
+            invoice = latest.scalar_one_or_none()
+            if invoice:
+                stmt = stmt.where(Lesson.date <= invoice.due_date)
+    else:
+        enrollment_stmt = select(StudentGroupEnrollment.group_id).where(
+            StudentGroupEnrollment.student_id == user.id,
+            StudentGroupEnrollment.status == EnrollmentStatus.ACTIVE,
+        )
+        enrollments = await session.execute(enrollment_stmt)
+        active_group_ids = enrollments.scalars().all()
+
+        if not active_group_ids:
+            return success({"items": [], "total": 0, "page": 1, "size": size})
+
+        accessible_group_ids: list[int] = []
+        restricted_due_dates: dict[int, object] = {}
+
+        for enrolled_group_id in active_group_ids:
+            can_access = await can_student_access_new_lessons(session, user.id, enrolled_group_id)
+            if can_access:
+                accessible_group_ids.append(enrolled_group_id)
+                continue
+
+            latest = await session.execute(
+                select(Payment)
+                .where(Payment.student_id == user.id, Payment.group_id == enrolled_group_id)
+                .order_by(Payment.billing_year.desc(), Payment.billing_month.desc())
+                .limit(1)
+            )
+            invoice = latest.scalar_one_or_none()
+            if invoice:
+                restricted_due_dates[enrolled_group_id] = invoice.due_date
+
+        stmt = stmt.where(Lesson.group_id.in_(active_group_ids))
+
+        if restricted_due_dates:
+            from sqlalchemy import or_, and_
+
+            restrictions = [
+                and_(Lesson.group_id == restricted_group_id, Lesson.date <= due_date)
+                for restricted_group_id, due_date in restricted_due_dates.items()
+            ]
+
+            if accessible_group_ids:
+                restrictions.append(Lesson.group_id.in_(accessible_group_ids))
+
+            stmt = stmt.where(or_(*restrictions))
+
+    data = await paginate(session, stmt, page, size)
+    return success({
+        "items": [LessonOut(**l.__dict__) for l in data["items"]],
+        "total": data["total"],
+        "page": data["page"],
+        "size": data["size"],
+    })
+
+
 @router.post("")
 async def create_lesson(
     payload: LessonCreate,

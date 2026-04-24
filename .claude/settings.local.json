@@ -35,7 +35,10 @@
       "Bash(taskkill /PID 18200 /F)",
       "Bash(taskkill:*)",
       "Bash(uvicorn:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(pip install *)",
+      "Bash(python scripts/init_db.py)"
     ],
     "env": {
       "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",

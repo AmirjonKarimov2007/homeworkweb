@@ -4,13 +4,17 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
-import { ArrowLeft, Clock, BookOpen } from "lucide-react";
+import { ArrowLeft, Clock, BookOpen, Upload, FileText, Paperclip } from "lucide-react";
 import Link from "next/link";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { getUser } from "@/lib/auth";
+import { useMounted } from "@/lib/use-mounted";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface HomeworkDetail {
   id: number;
@@ -22,18 +26,74 @@ interface HomeworkDetail {
   created_at: string;
 }
 
+interface SubmissionStatus {
+  status: string;
+  submission?: {
+    id: number;
+    text?: string;
+    attachments?: Array<{
+      id: number;
+      file_name: string;
+      file_path: string;
+    }>;
+  };
+}
+
 export default function HomeworkDetailPage() {
   const params = useParams();
   const router = useRouter();
   const homeworkId = Number(params.id);
   const qc = useQueryClient();
   const { addToast } = useToast();
+  const mounted = useMounted();
+  const user = mounted ? getUser() : null;
+  const isStudent = user?.role === "STUDENT";
 
   const [title, setTitle] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [instructions, setInstructions] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [editMode, setEditMode] = useState(false);
+
+  // Student homework submission states
+  const [openSubmitDialog, setOpenSubmitDialog] = useState(false);
+  const [homeworkText, setHomeworkText] = useState("");
+  const [homeworkFile, setHomeworkFile] = useState<File | null>(null);
+
+  // Get student's submission status
+  const { data: submissionStatus } = useQuery({
+    queryKey: ["homework-submission", homeworkId],
+    enabled: mounted && isStudent && !!homeworkId,
+    queryFn: async () => {
+      const response = await api.get(`/homework/${homeworkId}/my`);
+      return response.data.data;
+    },
+  });
+
+  // Submit homework mutation
+  const submitHomework = useMutation({
+    mutationFn: async () => {
+      const formData = new FormData();
+      if (homeworkText) formData.append("text", homeworkText);
+      // File attachment removed
+
+      return api.post(`/homework/${homeworkId}/submit`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+    },
+    onSuccess: () => {
+      setHomeworkText("");
+      setHomeworkFile(null);
+      setOpenSubmitDialog(false);
+      qc.invalidateQueries({ queryKey: ["homework-submission", homeworkId] });
+      addToast({ title: "Uy ishi yuborildi", description: "Muvaffaqiyatli yuborildi." });
+    },
+    onError: (err: any) => {
+      addToast({ title: "Xatolik", description: err?.response?.data?.detail || "Yuborishda xatolik." });
+    },
+  });
 
   // Get homework details
   const { data: homework, isLoading } = useQuery({
@@ -42,7 +102,7 @@ export default function HomeworkDetailPage() {
       const response = await api.get(`/homework/${homeworkId}`);
       return response.data.data.data;
     },
-    enabled: !!homeworkId,
+    enabled: mounted && !!homeworkId,
   });
 
   // Update homework mutation
@@ -111,6 +171,16 @@ export default function HomeworkDetailPage() {
       </div>
     );
   }
+
+  // Get homework attachments
+  const { data: attachments } = useQuery({
+    queryKey: ["homework-attachments", homeworkId],
+    enabled: mounted && !!homeworkId,
+    queryFn: async () => {
+      const response = await api.get(`/homework/${homeworkId}/attachments`);
+      return response.data.data;
+    },
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -261,32 +331,143 @@ export default function HomeworkDetailPage() {
 
             {/* Quick Actions */}
             <Card>
-              <CardContent className="p-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-4">Tezkor amallar</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditMode(true)}
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Tahrirlash
-                  </Button>
-                  <Button variant="outline">
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                    </svg>
+              {/* Student Submission Section */}
+              {isStudent && submissionStatus && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-emerald-600" />
+                      Uy ishi holatingiz
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          className={
+                            submissionStatus.status === "ACCEPTED" ? "bg-emerald-100 text-emerald-800" :
+                            submissionStatus.status === "REVIEWED" ? "bg-blue-100 text-blue-800" :
+                            submissionStatus.status === "LATE" ? "bg-red-100 text-red-800" :
+                            submissionStatus.status === "SUBMITTED" ? "bg-amber-100 text-amber-800" :
+                            "bg-gray-100 text-gray-800"
+                          }
+                        >
+                          {submissionStatus.status === "ACCEPTED" ? "Qabul qilingan" :
+                           submissionStatus.status === "REVIEWED" ? "Tekshirilmoqda" :
+                           submissionStatus.status === "LATE" ? "Kechikkan" :
+                           submissionStatus.status === "SUBMITTED" ? "Yuborilgan" :
+                           "Bajarish kerak"}
+                        </Badge>
+                      </div>
+
+                      {submissionStatus.submission && (
+                        <div className="space-y-3">
+                          {submissionStatus.submission.text && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-700 mb-2">Javob:</h4>
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-gray-800 whitespace-pre-wrap">{submissionStatus.submission.text}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {submissionStatus.submission.attachments && submissionStatus.submission.attachments.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-700 mb-2">Yuklangan fayllar:</h4>
+                              <div className="space-y-2">
+                                {submissionStatus.submission.attachments.map((attachment: any) => (
+                                  <div key={attachment.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                                    <Paperclip className="w-4 h-4 text-gray-500" />
+                                    <span className="text-sm text-gray-700">{attachment.file_name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {submissionStatus.status === "NOT_SUBMITTED" && (
+                        <div>
+                          <Dialog open={openSubmitDialog} onOpenChange={setOpenSubmitDialog}>
+                            <DialogTrigger asChild>
+                              <Button className="w-full">
+                                <Upload className="w-4 h-4 mr-2" />
+                                Uy ishini yuborish
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Uy ishini yuborish</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <label htmlFor="homework-text" className="text-sm font-medium text-gray-700">
+                                    Javob (matn)
+                                  </label>
+                                  <Textarea
+                                    id="homework-text"
+                                    placeholder="Vazifa javobingizni yozing..."
+                                    value={homeworkText}
+                                    onChange={(e) => setHomeworkText(e.target.value)}
+                                    className="mt-1"
+                                    rows={4}
+                                  />
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                  <Button
+                                    onClick={() => submitHomework.mutate()}
+                                    disabled={submitHomework.isPending}
+                                    className="flex-1"
+                                  >
+                                    {submitHomework.isPending ? "Yuborilmoqda..." : "Yuborish"}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setOpenSubmitDialog(false)}
+                                  >
+                                    Bekor qilish
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Teacher Actions */}
+              {!isStudent && (
+                <CardContent className="p-6">
+                  <h3 className="text-sm font-medium text-gray-700 mb-4">Tezkor amallar</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setEditMode(true)}
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Tahrirlash
+                    </Button>
+                    <Button variant="outline">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
     Uloash
-                  </Button>
-                  <Button variant="outline">
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    </Button>
+                    <Button variant="outline">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
     O'chirish
-                  </Button>
-                </div>
-              </CardContent>
+                    </Button>
+                  </div>
+                </CardContent>
+              )}
             </Card>
           </div>
         )}

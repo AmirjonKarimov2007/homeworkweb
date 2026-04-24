@@ -217,58 +217,85 @@ export default function PaymentsPage() {
       )}
 
       {isStudent && currentInvoice && (
-        <div className="card p-4">
-          <div className="text-sm text-emerald-700">Joriy tolov</div>
-          <div className="mt-2 flex flex-wrap items-center gap-4">
-            <div className="text-lg font-semibold text-emerald-900">{formatMoneyDisplay(currentInvoice.amount_due)}</div>
-            <Badge className="bg-emerald-100 text-emerald-800">{paymentStatusLabel[currentInvoice.status] || currentInvoice.status}</Badge>
-            <div className="text-sm text-slate-600">Muddat: {currentInvoice.due_date}</div>
-            <div className="text-sm text-slate-600">Qoldiq: {formatMoneyDisplay(currentInvoice.remaining_amount)}</div>
+        <div className="card p-4 md:p-6 bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-600">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-emerald-700">Joriy to'lov</div>
+                <div className="text-3xl md:text-4xl font-bold text-emerald-900">{formatMoneyDisplay(currentInvoice.amount_due)}</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-lg p-3 md:p-4">
+                  <div className="text-xs text-gray-600 mb-1">Muddat</div>
+                  <div className="text-sm md:text-base font-semibold text-gray-900">{currentInvoice.due_date}</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 md:p-4">
+                  <div className="text-xs text-gray-600 mb-1">Holati</div>
+                  <Badge className="bg-emerald-100 text-emerald-800 w-fit">{paymentStatusLabel[currentInvoice.status] || currentInvoice.status}</Badge>
+                </div>
+                <div className="bg-white rounded-lg p-3 md:p-4">
+                  <div className="text-xs text-gray-600 mb-1">Qoldiq</div>
+                  <div className="text-sm md:text-base font-semibold text-gray-900">{formatMoneyDisplay(currentInvoice.remaining_amount)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="text-xs text-gray-600 bg-white rounded px-3 py-2">
+              ℹ️ To'lov faqat admin tomonidan tasdiqlanadi. Chek yuboring yoki admin orqali to'lov qildirizng.
+            </div>
           </div>
-          <div className="mt-2 text-xs text-slate-500">Tolov faqat admin tomonidan tasdiqlanadi.</div>
         </div>
       )}
 
       {isStudent && (
-        <div className="card p-4">
-          <div className="text-sm font-medium text-emerald-900 mb-2">Tolovlar tarixi</div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Oy</TableHead>
-                <TableHead>Qarz</TableHead>
-                <TableHead className="hidden md:table-cell">Tolangan</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Amal</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedStudentInvoices.map((p: any) => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.month}</TableCell>
-                  <TableCell>{formatMoneyDisplay(p.amount_due)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{formatMoneyDisplay(p.amount_paid)}</TableCell>
-                  <TableCell>{paymentStatusLabel[p.status] || p.status}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedPayment(p);
-                        setReceiptOpen(true);
-                      }}
-                    >
-                      Chek yuborish
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sortedStudentInvoices.length === 0 && (
+        <div className="card p-4 md:p-6 space-y-4">
+          <div className="text-base font-semibold text-emerald-900">To'lov tarixi</div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500">Tolovlar topilmadi.</TableCell>
+                  <TableHead className="text-sm">Oy</TableHead>
+                  <TableHead className="text-sm">Summa</TableHead>
+                  <TableHead className="text-sm hidden sm:table-cell">To'langan</TableHead>
+                  <TableHead className="text-sm">Holati</TableHead>
+                  <TableHead className="text-sm">Amal</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sortedStudentInvoices.map((p: any) => (
+                  <TableRow key={p.id} className="hover:bg-emerald-50">
+                    <TableCell className="text-sm">{p.month}</TableCell>
+                    <TableCell className="text-sm font-medium">{formatMoneyDisplay(p.amount_due)}</TableCell>
+                    <TableCell className="text-sm hidden sm:table-cell">{formatMoneyDisplay(p.amount_paid)}</TableCell>
+                    <TableCell>
+                      <Badge className={statusTone(p.status)} variant="secondary">
+                        {paymentStatusLabel[p.status] || p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedPayment(p);
+                          setReceiptOpen(true);
+                        }}
+                        className="text-xs h-8"
+                      >
+                        Chek yuborish
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {sortedStudentInvoices.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-slate-500 py-8">
+                      To'lovlar topilmadi.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 
