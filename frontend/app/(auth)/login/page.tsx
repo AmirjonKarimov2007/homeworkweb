@@ -63,12 +63,22 @@ function LoginPageContent() {
       router.replace(last);
     } catch (err: any) {
       console.error("Login error:", err?.response?.data || err);
-      if (err?.response?.status === 401) {
+      const errorDetail = err?.response?.data?.detail || err?.message;
+      const errorCode = err?.response?.status;
+      console.error("Error detail:", errorDetail, "Status:", errorCode);
+
+      if (errorCode === 401) {
         setError("Login yoki parol noto'g'ri.");
-      } else if (err?.response?.status === 403) {
-        setError(err?.response?.data?.detail || "Kirishga ruxsat berilmadi.");
+      } else if (errorCode === 403) {
+        setError(errorDetail || "Kirishga ruxsat berilmadi.");
+      } else if (errorCode === 404) {
+        setError("Server bilan bog'lanishda xatolik. Backend server ishlamayapti yoki noto'g'ri URL.");
+      } else if (errorCode === 400) {
+        setError(errorDetail || "Noto'g'ri ma'lumot.");
+      } else if (errorCode === 0 || err?.code === "ERR_NETWORK") {
+        setError("Internet bog'lanish muammosi. Tarmoq aloqadorligini tekshiring.");
       } else {
-        setError("Server bilan bog'lanishda xatolik. Qayta urinib ko'ring.");
+        setError(`Xatolik yuz berdi (${errorCode || "noma'lum"}). Qayta urinib ko'ring.`);
       }
     } finally {
       setIsSubmitting(false);
@@ -109,9 +119,26 @@ function LoginPageContent() {
           <h1 className="text-2xl font-semibold text-emerald-900">Tizimga kirish</h1>
           <p className="text-sm text-emerald-700">Telefon yoki email va parolni kiriting.</p>
 
+          
           {error ? (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              {error}
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-500 text-lg">⚠️</span>
+                <div>
+                  <p className="font-medium">{error}</p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    {error?.includes("server ishlamayapti") && (
+                      <>
+                        Backend server ishlamayaptimi tekshiring:
+                        <span className="font-mono text-xs">cd backend</span> → <span className="font-mono text-xs">python -m venv .venv</span> → <span className="font-mono text-xs">.venv\Scripts\activate</span> → <span className="font-mono text-xs">uvicorn app.main:app --reload</span>
+                      </>
+                    )}
+                    {error?.includes("Internet") && (
+                      "Internet bog'lanishini tekshiring."
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
           ) : null}
 

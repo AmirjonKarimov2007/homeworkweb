@@ -40,23 +40,43 @@ async def list_teachers(
     session: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN)),
 ):
+    from app.models.group import Group
+
     stmt = select(User).where(User.role == Role.TEACHER)
     if not include_inactive:
         stmt = stmt.where(User.is_active == True)
     if search:
         stmt = stmt.where(or_(User.full_name.ilike(f"%{search}%"), User.phone.ilike(f"%{search}%")))
     data = await paginate(session, stmt, page, size)
+
+    # Get groups for each teacher
+    teacher_ids = [u.id for u in data["items"]]
+    groups_stmt = select(Group).where(Group.primary_teacher_id.in_(teacher_ids))
+    groups_result = await session.execute(groups_stmt)
+    groups = groups_result.scalars().all()
+
+    # Organize groups by teacher
+    teacher_groups = {}
+    for group in groups:
+        if group.primary_teacher_id not in teacher_groups:
+            teacher_groups[group.primary_teacher_id] = []
+        teacher_groups[group.primary_teacher_id].append({
+            "id": group.id,
+            "name": group.name
+        })
+
     return success({
         "items": [
-            UserOut(
-                id=u.id,
-                full_name=u.full_name,
-                phone=u.phone,
-                email=u.email,
-                role=u.role,
-                is_active=u.is_active,
-                created_at=u.created_at,
-            )
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "phone": u.phone,
+                "email": u.email,
+                "role": u.role,
+                "is_active": u.is_active,
+                "created_at": u.created_at,
+                "teacher_groups": teacher_groups.get(u.id, [])
+            }
             for u in data["items"]
         ],
         "total": data["total"],
@@ -71,6 +91,8 @@ async def create_teacher(
     session: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN)),
 ):
+    from app.models.group import Group
+
     exists = await session.execute(select(User).where(User.phone == payload.phone))
     if exists.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Phone already exists")
@@ -98,15 +120,22 @@ async def create_teacher(
         session.add(group)
     await session.commit()
 
-    return success(UserOut(
-        id=user.id,
-        full_name=user.full_name,
-        phone=user.phone,
-        email=user.email,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    ))
+    # Fetch assigned groups to return
+    teacher_groups = [
+        {"id": group.id, "name": group.name}
+        for group in groups
+    ]
+
+    return success({
+        "id": user.id,
+        "full_name": user.full_name,
+        "phone": user.phone,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "teacher_groups": teacher_groups
+    })
 
 
 @router.delete("/{teacher_id}")
@@ -138,19 +167,32 @@ async def get_teacher(
     session: AsyncSession = Depends(get_db),
     _: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN)),
 ):
+    from app.models.group import Group
+
     result = await session.execute(select(User).where(User.id == teacher_id, User.role == Role.TEACHER))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Teacher not found")
-    return success(UserOut(
-        id=user.id,
-        full_name=user.full_name,
-        phone=user.phone,
-        email=user.email,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    ))
+
+    # Get groups for this teacher
+    groups_result = await session.execute(select(Group).where(Group.primary_teacher_id == teacher_id))
+    groups = groups_result.scalars().all()
+
+    teacher_groups = [
+        {"id": group.id, "name": group.name}
+        for group in groups
+    ]
+
+    return success({
+        "id": user.id,
+        "full_name": user.full_name,
+        "phone": user.phone,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "teacher_groups": teacher_groups
+    })
 
 
 @router.patch("/{teacher_id}")
@@ -177,13 +219,67 @@ async def update_teacher(
 
     session.add(user)
     await session.commit()
-    await session.refresh(user)
-    return success(UserOut(
-        id=user.id,
-        full_name=user.full_name,
-        phone=user.phone,
-        email=user.email,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    ))
+
+    # Get groups for this teacher
+    groups_result = await session.execute(select(Group).where(Group.primary_teacher_id == teacher_id))
+    groups = groups_result.scalars().all()
+
+    teacher_groups = [
+        {"id": group.id, "name": group.name}
+        for group in groups
+    ]
+
+    return success({
+        "id": user.id,
+        "full_name": user.full_name,
+        "phone": user.phone,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "teacher_groups": teacher_groups
+    })
+
+
+@router.patch("/{teacher_id}/groups")
+async def update_teacher_groups(
+    teacher_id: int,
+    group_ids: list[int],
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN)),
+):
+    result = await session.execute(select(User).where(User.id == teacher_id, User.role == Role.TEACHER))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    if not group_ids:
+        raise HTTPException(status_code=400, detail="At least one group is required")
+
+    # Get all groups with this teacher
+    groups_result = await session.execute(select(Group).where(Group.primary_teacher_id == teacher_id))
+    existing_groups = groups_result.scalars().all()
+    existing_group_ids = {g.id for g in existing_groups}
+
+    # Get selected groups
+    selected_groups_result = await session.execute(select(Group).where(Group.id.in_(group_ids)))
+    selected_groups = selected_groups_result.scalars().all()
+
+    # Remove teacher from groups not in the new list
+    for group in existing_groups:
+        if group.id not in group_ids:
+            group.primary_teacher_id = None
+            session.add(group)
+
+    # Add teacher to new groups
+    found = {g.id for g in selected_groups}
+    if len(found) != len(group_ids):
+        raise HTTPException(status_code=400, detail="Invalid group ids")
+
+    for group in selected_groups:
+        if group.id not in existing_group_ids:
+            group.primary_teacher_id = user.id
+            session.add(group)
+
+    await session.commit()
+    return success(message="Teacher groups updated")

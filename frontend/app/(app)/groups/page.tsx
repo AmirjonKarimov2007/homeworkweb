@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { formatMoney, parseMoney } from "@/lib/format";
 
 export default function GroupsPage() {
+  const PAGE_SIZE = 10;
   const qc = useQueryClient();
   const { addToast } = useToast();
   const [name, setName] = useState("");
@@ -37,6 +38,7 @@ export default function GroupsPage() {
   const [editPaymentDay, setEditPaymentDay] = useState("5");
   const [editPaymentRequired, setEditPaymentRequired] = useState(true);
   const [editCourseId, setEditCourseId] = useState("");
+  const [page, setPage] = useState(1);
 
   const capitalize = (str: string) => {
     if (!str) return '';
@@ -44,13 +46,19 @@ export default function GroupsPage() {
   };
 
   const { data } = useQuery({
-    queryKey: ["groups"],
-    queryFn: async () => (await api.get("/groups")).data.data,
+    queryKey: ["groups", page],
+    queryFn: async () => {
+      const res = await api.get(`/groups?page=${page}&size=${PAGE_SIZE}`);
+      return res.data?.data || { items: [] };
+    },
   });
 
   const { data: coursesData } = useQuery({
     queryKey: ["courses"],
-    queryFn: async () => (await api.get("/courses/active")).data.data,
+    queryFn: async () => {
+      const res = await api.get("/courses/active");
+      return res.data?.data || [];
+    },
   });
 
   const courseItems = Array.isArray(coursesData)

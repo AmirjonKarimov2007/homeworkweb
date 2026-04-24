@@ -8,7 +8,10 @@ import { PageHeader } from "@/components/page-header";
 export default function AuditLogsPage() {
   const { data } = useQuery({
     queryKey: ["audit-logs"],
-    queryFn: async () => (await api.get("/audit-logs")).data.data,
+    queryFn: async () => {
+      const res = await api.get("/audit-logs");
+      return res.data?.data || [];
+    },
   });
 
   return (

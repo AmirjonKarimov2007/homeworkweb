@@ -23,7 +23,8 @@ export default function LessonsPage() {
   const { data } = useQuery({
     queryKey: ["lessons"],
     queryFn: async () => {
-      const response = (await api.get("/lessons")).data.data;
+      const res = await api.get("/lessons");
+      const response = res.data?.data || { items: [] };
       // Sort by newest first
       if (response?.items) {
         response.items.sort((a: any, b: any) =>

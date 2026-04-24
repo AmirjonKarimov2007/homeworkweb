@@ -6,7 +6,6 @@ import {
   Wallet,
   Receipt,
   ShieldCheck,
-  Settings,
   User,
   Bell,
   BookOpen,
@@ -30,7 +29,6 @@ export const getRoutes = (role?: string | null): RouteItem[] => {
     { label: "Moliya", href: "/finance", roles: ["SUPER_ADMIN", "ADMIN"], icon: Wallet },
     { label: "Tolovlar", href: "/payments", roles: ["SUPER_ADMIN", "ADMIN", "STUDENT"], icon: Receipt },
     { label: "Audit log", href: "/audit-logs", roles: ["SUPER_ADMIN"], icon: ShieldCheck },
-    { label: "Sozlamalar", href: "/settings", roles: ["SUPER_ADMIN", "ADMIN"], icon: Settings },
     { label: "Profil", href: "/profile", roles: ["SUPER_ADMIN", "ADMIN", "TEACHER", "STUDENT"], icon: User },
     { label: "Xabarnomalar", href: "/notifications", roles: ["SUPER_ADMIN", "ADMIN", "TEACHER", "STUDENT"], icon: Bell },
   ];

@@ -193,6 +193,32 @@ async def get_user(
     ))
 
 
+@router.post("/{user_id}/password")
+async def update_user_password(
+    user_id: int,
+    payload: dict,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN)),
+):
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    password = payload.get("password")
+    if not password:
+        raise HTTPException(status_code=400, detail="Password is required")
+
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    user.hashed_password = hash_password(password)
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return success({"message": "Password updated successfully", "user_id": user_id})
+
+
 @router.patch("/{user_id}")
 async def update_user(
     user_id: int,

@@ -23,7 +23,10 @@ export default function CoursesPage() {
 
   const { data } = useQuery({
     queryKey: ["courses"],
-    queryFn: async () => (await api.get("/courses")).data.data,
+    queryFn: async () => {
+      const res = await api.get("/courses", { params: { active: true } });
+      return res.data?.data || { items: [] };
+    },
   });
 
   const createMutation = useMutation({

@@ -24,6 +24,15 @@ export default function DashboardPage() {
     queryFn: async () => (await api.get("/reports/summary")).data.data,
   });
 
+  const { data: debtDetails } = useQuery({
+    queryKey: ["debt-details"],
+    enabled: mounted && isAdmin,
+    queryFn: async () => {
+      const result = await api.get("/payments?status=OVERDUE");
+      return result.data.data;
+    },
+  });
+
   const { data: myGroups } = useQuery({
     queryKey: ["my-groups"],
     enabled: mounted && (isTeacher || isStudent),
@@ -105,11 +114,24 @@ export default function DashboardPage() {
 
       {isAdmin && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             <MetricCard title="Talabalar soni" value={isLoading ? "..." : data?.total_students ?? "-"} icon={<Users className="h-5 w-5" />} />
             <MetricCard title="Faol guruhlar" value={isLoading ? "..." : data?.active_groups ?? "-"} icon={<UsersRound className="h-5 w-5" />} />
-            <MetricCard title="Kutilayotgan to‘lov" value={isLoading ? "..." : data?.pending_payments ?? "-"} icon={<Bell className="h-5 w-5" />} />
-            <MetricCard title="Oylik tushum" value={isLoading ? "..." : formatMoneyDisplay(data?.monthly_income)} icon={<Wallet className="h-5 w-5" />} />
+            <MetricCard
+              title="Qarzdorlar soni"
+              value={isLoading ? "..." : data?.debtors_count ?? "-"}
+              icon={<Bell className="h-5 w-5" />}
+            />
+            <MetricCard
+              title="Umumiy qarz"
+              value={isLoading ? "..." : formatMoneyDisplay(data?.pending_payments)}
+              icon={<Wallet className="h-5 w-5" />}
+            />
+            <MetricCard
+              title="Oylik tushum"
+              value={isLoading ? "..." : formatMoneyDisplay(data?.monthly_income)}
+              icon={<Wallet className="h-5 w-5" />}
+            />
           </div>
 
           <Card className="animate-in fade-in">
@@ -145,9 +167,9 @@ export default function DashboardPage() {
             <MetricCard title="Yuborilgan uy ishi" value={homeworkStats?.submitted ?? 0} icon={<BookOpen className="h-5 w-5" />} />
             <MetricCard title="Yuborilmagan" value={homeworkStats?.notSubmitted ?? 0} icon={<BookOpen className="h-5 w-5" />} />
             <MetricCard
-              title="Mening to‘lovim"
-              value={currentInvoice ? formatMoneyDisplay(currentInvoice.remaining_amount) : "-"}
-              icon={<Wallet className="h-5 w-5" />}
+              title="Qarzim"
+              value={currentInvoice && currentInvoice.status !== "PAID" ? formatMoneyDisplay(currentInvoice.remaining_amount) : "0"}
+              icon={<Bell className="h-5 w-5" />}
             />
           </div>
 
