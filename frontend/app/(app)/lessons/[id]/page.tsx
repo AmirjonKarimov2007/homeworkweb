@@ -339,9 +339,9 @@ export default function LessonDetailPage() {
           <div className="text-sm font-medium text-emerald-900">Uyga vazifa</div>
           <div className="flex items-center gap-2">
             {isStudent && <Badge className={status.tone}>{status.label}</Badge>}
-            {canEdit && homework && !hwEditMode && (
+            {canEdit && !hwEditMode && (
               <Button size="sm" onClick={() => setHwEditMode(true)}>
-                ✏️ Tahrirlash
+                {homework ? "✏️ Tahrirlash" : "➕ Uyga vazifa qo'shish"}
               </Button>
             )}
             {canEdit && hwEditMode && (
@@ -371,7 +371,7 @@ export default function LessonDetailPage() {
         {canEdit && hwEditMode && (
           <div className="flex flex-col gap-2 md:flex-row p-3 bg-emerald-50 rounded-lg">
             <Input type="file" onChange={(e) => setHomeworkFile(e.target.files?.[0] || null)} />
-            <Button disabled={!homeworkFile || !homework} onClick={() => uploadHomeworkFile.mutate()}>
+            <Button disabled={!homeworkFile} onClick={() => uploadHomeworkFile.mutate()}>
               Foto/fayl biriktirish
             </Button>
             <Button
@@ -389,6 +389,15 @@ export default function LessonDetailPage() {
           </div>
         )}
 
+        {!homework && !hwEditMode && canEdit && (
+          <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+            <p className="text-sm text-amber-800 mb-2">Bu dars uchun hali uy ishi qo'shilmagan.</p>
+            <Button size="sm" onClick={() => setHwEditMode(true)} className="bg-amber-600 hover:bg-amber-700">
+              ➕ Uyga vazifa yaratish
+            </Button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           {homeworkLinks.map((a) => (
             <a key={a.id} href={a.url} className="block rounded-xl border border-emerald-100 p-2 text-sm text-emerald-700">
@@ -398,7 +407,7 @@ export default function LessonDetailPage() {
               {a.name}
             </a>
           ))}
-          {homeworkLinks.length === 0 && <div className="text-sm text-slate-500">Fayl biriktirilmagan.</div>}
+          {homeworkLinks.length === 0 && homework && <div className="text-sm text-slate-500">Fayl biriktirilmagan.</div>}
         </div>
 
         {isStudent && homework && submission && !editMode && (

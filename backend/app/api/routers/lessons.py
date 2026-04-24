@@ -57,6 +57,8 @@ async def list_lessons(
                 invoice = latest.scalar_one_or_none()
                 if invoice:
                     stmt = stmt.where(Lesson.date <= invoice.due_date)
+    # Sort by date descending (newest first)
+    stmt = stmt.order_by(Lesson.date.desc())
     data = await paginate(session, stmt, page, size)
     return success({
         "items": [LessonOut(**l.__dict__) for l in data["items"]],
@@ -147,6 +149,8 @@ async def list_student_lessons(
 
             stmt = stmt.where(or_(*restrictions))
 
+    # Sort by date descending (newest first)
+    stmt = stmt.order_by(Lesson.date.desc())
     data = await paginate(session, stmt, page, size)
     return success({
         "items": [LessonOut(**l.__dict__) for l in data["items"]],
