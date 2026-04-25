@@ -22,13 +22,41 @@ router = APIRouter(prefix="/lessons", tags=["lessons"])
 async def list_lessons(
     group_id: int | None = None,
     page: int = 1,
-    size: int = 20,
+    size: int = 6,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     stmt = select(Lesson)
     if group_id:
         stmt = stmt.where(Lesson.group_id == group_id)
+        print(f"Filtering by group_id: {group_id}")
+
+    # Admin and Super Admin can see all lessons
+    if user.role in [Role.SUPER_ADMIN, Role.ADMIN]:
+        print(f"Admin {user.id} can see all lessons")
+        # No filtering needed for admin roles
+
+    # Teacher can only see their own groups' lessons
+    elif user.role == Role.TEACHER:
+        if group_id is None:
+            # Get all groups where teacher is primary teacher
+            teacher_groups = await session.execute(
+                select(Group.id).where(Group.primary_teacher_id == user.id)
+            )
+            group_ids = teacher_groups.scalars().all()
+            print(f"Teacher {user.id} groups: {group_ids}")
+            if not group_ids:
+                return success({"items": [], "total": 0, "page": page, "size": size})
+            stmt = stmt.where(Lesson.group_id.in_(group_ids))
+        else:
+            # Check if teacher is primary teacher of this specific group
+            group_result = await session.execute(
+                select(Group).where(Group.id == group_id)
+            )
+            group = group_result.scalar_one_or_none()
+            if not group or group.primary_teacher_id != user.id:
+                raise HTTPException(status_code=403, detail="Forbidden: You are not the primary teacher of this group")
+
     if user.role == Role.STUDENT:
         if group_id is None:
             stmt = stmt.join(StudentGroupEnrollment, StudentGroupEnrollment.group_id == Lesson.group_id).where(
@@ -57,9 +85,11 @@ async def list_lessons(
                 invoice = latest.scalar_one_or_none()
                 if invoice:
                     stmt = stmt.where(Lesson.date <= invoice.due_date)
-    # Sort by date descending (newest first)
-    stmt = stmt.order_by(Lesson.date.desc())
+    # Sort by created_at descending (newest first), then by date
+    stmt = stmt.order_by(Lesson.created_at.desc(), Lesson.date.desc())
+    print(f"Querying lessons with page={page}, size={size}, total lessons count will be calculated")
     data = await paginate(session, stmt, page, size)
+    print(f"Pagination result: {data}")
     return success({
         "items": [LessonOut(**l.__dict__) for l in data["items"]],
         "total": data["total"],
@@ -72,7 +102,7 @@ async def list_lessons(
 async def list_student_lessons(
     group_id: int | None = None,
     page: int = 1,
-    size: int = 20,
+    size: int = 6,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -149,8 +179,8 @@ async def list_student_lessons(
 
             stmt = stmt.where(or_(*restrictions))
 
-    # Sort by date descending (newest first)
-    stmt = stmt.order_by(Lesson.date.desc())
+    # Sort by created_at descending (newest first), then by date
+    stmt = stmt.order_by(Lesson.created_at.desc(), Lesson.date.desc())
     data = await paginate(session, stmt, page, size)
     return success({
         "items": [LessonOut(**l.__dict__) for l in data["items"]],
@@ -231,6 +261,31 @@ async def update_lesson(
     await session.refresh(lesson)
     await log_action(session, user.id, "update_lesson", "lesson", lesson.id)
     return success(LessonOut(**lesson.__dict__))
+
+
+@router.delete("/{lesson_id}")
+async def delete_lesson(
+    lesson_id: int,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(Role.SUPER_ADMIN, Role.ADMIN, Role.TEACHER)),
+):
+    result = await session.execute(select(Lesson).where(Lesson.id == lesson_id))
+    lesson = result.scalar_one_or_none()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    # Check permissions for teachers
+    if user.role == Role.TEACHER:
+        group_result = await session.execute(select(Group).where(Group.id == lesson.group_id))
+        group = group_result.scalar_one_or_none()
+        if not group or group.primary_teacher_id != user.id:
+            raise HTTPException(status_code=403, detail="Forbidden: You are not the primary teacher of this group")
+
+    # Delete the lesson
+    await session.delete(lesson)
+    await session.commit()
+    await log_action(session, user.id, "delete_lesson", "lesson", lesson_id)
+    return success({"message": "Lesson deleted successfully"})
 
 
 @router.get("/{lesson_id}/attachments")
