@@ -103,12 +103,21 @@ async def create_homework(
             )
         )
         student_ids = [row[0] for row in enroll_result.all()]
+        title = f"Yangi uyga vazifa: {homework.title}"
+        body = homework.instructions or "Sizga yangi uyga vazifa berildi."
         await create_notifications_bulk(
             session,
             student_ids,
-            title=f"Yangi uyga vazifa: {homework.title}",
-            body=homework.instructions,
+            title=title,
+            body=body,
             channel=NotificationChannel.WEB,
+        )
+        await create_notifications_bulk(
+            session,
+            student_ids,
+            title=title,
+            body=body,
+            channel=NotificationChannel.TELEGRAM,
         )
 
     return success(HomeworkOut(**homework.__dict__))

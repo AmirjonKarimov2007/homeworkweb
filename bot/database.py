@@ -1,6 +1,6 @@
 import re
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 import asyncpg
@@ -372,6 +372,52 @@ class Database:
             logger.error(f"Error getting lesson detail {lesson_id}: {e}")
             return None
 
+    async def get_homework_for_lesson(self, lesson_id: int) -> Optional[Homework]:
+        try:
+            async with self.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT h.id, h.title, h.instructions, h.due_date, l.title AS lesson_title
+                    FROM homework_tasks h
+                    JOIN lessons l ON l.id = h.lesson_id
+                    WHERE h.lesson_id = $1
+                    ORDER BY h.created_at DESC
+                    LIMIT 1
+                    """,
+                    lesson_id,
+                )
+                if not row:
+                    return None
+                return Homework(
+                    id=row["id"],
+                    title=row["title"],
+                    description=row["instructions"],
+                    due_date=row["due_date"],
+                    lesson_title=row["lesson_title"],
+                )
+        except Exception as e:
+            logger.error(f"Error getting homework for lesson {lesson_id}: {e}")
+            return None
+
+    async def get_student_submission_status(self, student_id: int, homework_id: int) -> Optional[str]:
+        try:
+            async with self.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT status
+                    FROM homework_submissions
+                    WHERE student_id = $1 AND homework_id = $2
+                    ORDER BY submitted_at DESC, id DESC
+                    LIMIT 1
+                    """,
+                    student_id,
+                    homework_id,
+                )
+                return row["status"] if row else None
+        except Exception as e:
+            logger.error(f"Error getting submission status: {e}")
+            return None
+
     async def get_homework_by_group(self, group_id: int, offset: int = 0, limit: int = 10) -> List[Homework]:
         try:
             async with self.get_connection() as conn:
@@ -464,13 +510,223 @@ class Database:
             logger.error(f"Error getting student submission count for {student_id}: {e}")
             return 0
 
-    async def create_homework(self, lesson_id: int, title: str, instructions: str, teacher_id: int, due_date: datetime = None) -> bool:
+    async def get_students_by_group(self, group_id: int, offset: int = 0, limit: int = 10) -> List[User]:
+        try:
+            async with self.get_connection() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT u.id, u.full_name, u.role, u.phone
+                    FROM users u
+                    JOIN student_group_enrollments sge ON sge.student_id = u.id
+                    WHERE sge.group_id = $1
+                      AND sge.status = 'ACTIVE'
+                      AND u.is_active = true
+                    ORDER BY u.full_name
+                    LIMIT $2 OFFSET $3
+                    """,
+                    group_id,
+                    limit,
+                    offset,
+                )
+                return [
+                    User(
+                        id=row["id"],
+                        full_name=row["full_name"],
+                        role=row["role"],
+                        phone=row["phone"],
+                        telegram_id=None,
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"Error getting students by group {group_id}: {e}")
+            return []
+
+    async def get_students_count(self, group_id: int) -> int:
         try:
             async with self.get_connection() as conn:
                 row = await conn.fetchrow(
                     """
-                    INSERT INTO homework_tasks (lesson_id, title, instructions, due_date, created_by, created_at)
-                    VALUES ($1, $2, $3, $4, $5, NOW())
+                    SELECT COUNT(*) AS count
+                    FROM student_group_enrollments
+                    WHERE group_id = $1 AND status = 'ACTIVE'
+                    """,
+                    group_id,
+                )
+                return int(row["count"]) if row else 0
+        except Exception as e:
+            logger.error(f"Error getting student count for group {group_id}: {e}")
+            return 0
+
+    async def get_student_submission_for_lesson(self, student_id: int, lesson_id: int) -> Optional[dict]:
+        try:
+            async with self.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT
+                        hs.id AS submission_id,
+                        hs.text,
+                        hs.status,
+                        hs.submitted_at,
+                        h.id AS homework_id,
+                        h.title AS homework_title,
+                        h.instructions,
+                        h.due_date
+                    FROM homework_tasks h
+                    LEFT JOIN homework_submissions hs
+                      ON hs.homework_id = h.id AND hs.student_id = $1
+                    WHERE h.lesson_id = $2
+                    ORDER BY hs.submitted_at DESC NULLS LAST, h.created_at DESC
+                    LIMIT 1
+                    """,
+                    student_id,
+                    lesson_id,
+                )
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Error getting student submission for lesson {lesson_id}: {e}")
+            return None
+
+    async def get_lesson_stats(self, lesson_id: int) -> Optional[dict]:
+        try:
+            async with self.get_connection() as conn:
+                homework = await conn.fetchrow(
+                    """
+                    SELECT h.id, l.group_id
+                    FROM homework_tasks h
+                    JOIN lessons l ON l.id = h.lesson_id
+                    WHERE h.lesson_id = $1
+                    ORDER BY h.created_at DESC
+                    LIMIT 1
+                    """,
+                    lesson_id,
+                )
+                if not homework:
+                    lesson = await conn.fetchrow("SELECT group_id FROM lessons WHERE id = $1", lesson_id)
+                    if not lesson:
+                        return None
+                    group_id = lesson["group_id"]
+                    students = await conn.fetch(
+                        """
+                        SELECT u.full_name
+                        FROM users u
+                        JOIN student_group_enrollments sge ON sge.student_id = u.id
+                        WHERE sge.group_id = $1 AND sge.status = 'ACTIVE'
+                        ORDER BY u.full_name
+                        """,
+                        group_id,
+                    )
+                    not_submitted = [row["full_name"] for row in students]
+                    return {
+                        "homework_id": None,
+                        "submitted_count": 0,
+                        "not_submitted_count": len(not_submitted),
+                        "submitted_names": [],
+                        "not_submitted_names": not_submitted,
+                    }
+
+                group_id = homework["group_id"]
+                homework_id = homework["id"]
+
+                submitted_rows = await conn.fetch(
+                    """
+                    SELECT DISTINCT u.full_name
+                    FROM homework_submissions hs
+                    JOIN users u ON u.id = hs.student_id
+                    WHERE hs.homework_id = $1
+                    ORDER BY u.full_name
+                    """,
+                    homework_id,
+                )
+                submitted_names = [row["full_name"] for row in submitted_rows]
+
+                not_submitted_rows = await conn.fetch(
+                    """
+                    SELECT u.full_name
+                    FROM users u
+                    JOIN student_group_enrollments sge ON sge.student_id = u.id
+                    WHERE sge.group_id = $1
+                      AND sge.status = 'ACTIVE'
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM homework_submissions hs
+                        WHERE hs.homework_id = $2
+                          AND hs.student_id = u.id
+                      )
+                    ORDER BY u.full_name
+                    """,
+                    group_id,
+                    homework_id,
+                )
+                not_submitted_names = [row["full_name"] for row in not_submitted_rows]
+
+                return {
+                    "homework_id": homework_id,
+                    "submitted_count": len(submitted_names),
+                    "not_submitted_count": len(not_submitted_names),
+                    "submitted_names": submitted_names,
+                    "not_submitted_names": not_submitted_names,
+                }
+        except Exception as e:
+            logger.error(f"Error getting lesson stats {lesson_id}: {e}")
+            return None
+
+    async def update_submission_status(self, submission_id: int, reviewer_id: int, status: str) -> bool:
+        try:
+            async with self.get_connection() as conn:
+                await conn.execute(
+                    """
+                    UPDATE homework_submissions
+                    SET status = $1,
+                        reviewed_by = $2,
+                        reviewed_at = NOW()
+                    WHERE id = $3
+                    """,
+                    status,
+                    reviewer_id,
+                    submission_id,
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Error updating submission status {submission_id}: {e}")
+            return False
+
+    async def create_lesson(self, group_id: int, title: str, description: Optional[str], teacher_id: int, lesson_date: date) -> Optional[int]:
+        try:
+            async with self.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO lessons (group_id, title, date, description, created_by, created_at, visible_to_students)
+                    VALUES ($1, $2, $3, $4, $5, NOW(), true)
+                    RETURNING id
+                    """,
+                    group_id,
+                    title,
+                    lesson_date,
+                    description,
+                    teacher_id,
+                )
+                return int(row["id"]) if row else None
+        except Exception as e:
+            logger.error(f"Error creating lesson: {e}")
+            return None
+
+    async def create_homework(self, lesson_id: int, title: str, instructions: str, teacher_id: int, due_date: datetime = None) -> Optional[int]:
+        try:
+            async with self.get_connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO homework_tasks (
+                        lesson_id,
+                        title,
+                        instructions,
+                        due_date,
+                        allow_late_submission,
+                        max_revision_attempts,
+                        created_by,
+                        created_at
+                    )
+                    VALUES ($1, $2, $3, $4, true, 2, $5, NOW())
                     RETURNING id
                     """,
                     lesson_id,
@@ -479,17 +735,38 @@ class Database:
                     due_date,
                     teacher_id,
                 )
-                return bool(row)
+                return int(row["id"]) if row else None
         except Exception as e:
             logger.error(f"Error creating homework: {e}")
+            return None
+
+    async def update_homework(self, homework_id: int, title: str, instructions: str, due_date: Optional[datetime]) -> bool:
+        try:
+            async with self.get_connection() as conn:
+                await conn.execute(
+                    """
+                    UPDATE homework_tasks
+                    SET title = $1,
+                        instructions = $2,
+                        due_date = $3
+                    WHERE id = $4
+                    """,
+                    title,
+                    instructions,
+                    due_date,
+                    homework_id,
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Error updating homework {homework_id}: {e}")
             return False
 
-    async def submit_homework(self, user_id: int, homework_id: int, text: str) -> bool:
+    async def submit_homework(self, user_id: int, homework_id: int, text: str) -> str:
         try:
             async with self.get_connection() as conn:
                 existing = await conn.fetchrow(
                     """
-                    SELECT id
+                    SELECT id, status, reviewed_by
                     FROM homework_submissions
                     WHERE homework_id = $1 AND student_id = $2
                     ORDER BY id DESC
@@ -499,6 +776,12 @@ class Database:
                     user_id,
                 )
                 if existing:
+                    if existing["reviewed_by"] is not None or existing["status"] in {
+                        "ACCEPTED",
+                        "REVISION_REQUESTED",
+                        "REVIEWED",
+                    }:
+                        return "LOCKED"
                     await conn.execute(
                         """
                         UPDATE homework_submissions
@@ -522,10 +805,10 @@ class Database:
                         user_id,
                         text,
                     )
-                return True
+                return "OK"
         except Exception as e:
             logger.error(f"Error submitting homework: {e}")
-            return False
+            return "ERROR"
 
 
 db = Database()
