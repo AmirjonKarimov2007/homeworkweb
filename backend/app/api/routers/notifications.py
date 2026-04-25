@@ -8,7 +8,7 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.models.group import StudentGroupEnrollment, Group
 from app.schemas.notification import NotificationOut
-from app.services.notification_service import create_notifications_bulk, mark_sent
+from app.services.notification_service import create_notifications_bulk, mark_sent, send_telegram_messages_to_users
 from app.utils.responses import success
 from app.utils.enums import Role, NotificationStatus, NotificationChannel, EnrollmentStatus
 
@@ -80,6 +80,19 @@ async def send_notification(
         payload.body,
         channel=NotificationChannel.WEB,
     )
+    await create_notifications_bulk(
+        session,
+        targets,
+        payload.title,
+        payload.body,
+        channel=NotificationChannel.TELEGRAM,
+    )
+    telegram_stats = await send_telegram_messages_to_users(
+        session,
+        user_ids=targets,
+        title=payload.title,
+        body=payload.body,
+    )
     # Save a copy for sender so admin can see history
     admin_copy = Notification(
         user_id=user.id,
@@ -90,7 +103,11 @@ async def send_notification(
     )
     session.add(admin_copy)
     await session.commit()
-    return success({"sent": created})
+    return success({
+        "sent": created,
+        "telegram_target_count": telegram_stats["target_count"],
+        "telegram_sent_count": telegram_stats["sent_count"],
+    })
 
 
 @router.patch("/{notification_id}/read")

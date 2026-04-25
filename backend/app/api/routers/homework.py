@@ -24,7 +24,7 @@ from app.utils.responses import success
 from app.utils.files import save_upload_file
 from app.services.audit_service import log_action
 from app.services.homework_service import submit_homework
-from app.services.notification_service import create_notifications_bulk
+from app.services.notification_service import create_notifications_bulk, send_telegram_messages_to_users
 from app.utils.enums import NotificationChannel
 
 router = APIRouter(prefix="/homework", tags=["homework"])
@@ -118,6 +118,12 @@ async def create_homework(
             title=title,
             body=body,
             channel=NotificationChannel.TELEGRAM,
+        )
+        await send_telegram_messages_to_users(
+            session,
+            user_ids=student_ids,
+            title="Sizda yangi homework bor!",
+            body=f"{homework.title}\n\n{body}",
         )
 
     return success(HomeworkOut(**homework.__dict__))

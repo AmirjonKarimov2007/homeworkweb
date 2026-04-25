@@ -245,7 +245,15 @@ class BotHandlers:
                 teacher_id=user.id,
                 due_date=due_date,
             )
-            await message.answer("✅ Homework yaratildi." if homework_id else "❌ Homework yaratib bo'lmadi.")
+            if homework_id:
+                await message.answer("✅ Homework yaratildi.")
+                await self._notify_group_students_about_homework(
+                    group_id=state["group_id"],
+                    title=state["title"],
+                    due_date=due_date,
+                )
+            else:
+                await message.answer("❌ Homework yaratib bo'lmadi.")
         else:
             success = await db.update_homework(
                 homework_id=state["homework_id"],
@@ -592,15 +600,41 @@ class BotHandlers:
         )
 
     async def start_create_homework(self, callback: types.CallbackQuery, lesson_id: int):
+        group_id = await db.get_lesson_group_id(lesson_id)
+        if not group_id:
+            await callback.message.edit_text("Dars topilmadi.")
+            return
+
         self.pending_actions[callback.from_user.id] = {
             "type": "create_homework",
             "lesson_id": lesson_id,
+            "group_id": group_id,
             "step": "title",
         }
         await callback.message.edit_text(
             "➕ Yangi homework\n\n"
             "1-qadam: homework sarlavhasini yuboring.",
         )
+
+    async def _notify_group_students_about_homework(self, group_id: Optional[int], title: str, due_date: Optional[datetime]):
+        if not group_id:
+            return
+
+        telegram_ids = await db.get_group_student_telegram_ids(group_id)
+        if not telegram_ids:
+            return
+
+        deadline_text = due_date.strftime("%d.%m.%Y %H:%M") if due_date else "-"
+        text = (
+            "📚 Sizda yangi homework bor.\n\n"
+            f"📝 {title}\n"
+            f"⏰ Deadline: {deadline_text}"
+        )
+        for telegram_id in telegram_ids:
+            try:
+                await self.bot.send_message(chat_id=telegram_id, text=text)
+            except Exception as e:
+                logger.warning(f"Homework xabari yuborilmadi ({telegram_id}): {e}")
 
     async def start_edit_homework(self, callback: types.CallbackQuery, lesson_id: int, homework_id: int):
         self.pending_actions[callback.from_user.id] = {

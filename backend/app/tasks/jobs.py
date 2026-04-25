@@ -7,7 +7,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.homework import HomeworkTask, HomeworkSubmission
 from app.models.lesson import Lesson
 from app.models.group import StudentGroupEnrollment
-from app.services.notification_service import create_notification
+from app.services.notification_service import create_notification, send_telegram_messages_to_users
 from app.services.payment_service import generate_monthly_payments
 from app.utils.enums import Role, PaymentStatus, AttendanceStatus, EnrollmentStatus
 
@@ -39,11 +39,19 @@ async def send_upcoming_payment_reminders(session: AsyncSession, days_before: in
         )
     )
     for payment in result.scalars().all():
+        title = "To‘lov muddati yaqin"
+        body = f"{payment.month} oy uchun to‘lov muddati {payment.due_date} kuni."
         await create_notification(
             session,
-            title="To‘lov muddati yaqin",
-            body=f"{payment.month} oy uchun to‘lov muddati {payment.due_date} kuni.",
+            title=title,
+            body=body,
             user_id=payment.student_id,
+        )
+        await send_telegram_messages_to_users(
+            session,
+            user_ids=[payment.student_id],
+            title=title,
+            body=body,
         )
 
 

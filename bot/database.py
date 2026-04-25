@@ -372,6 +372,18 @@ class Database:
             logger.error(f"Error getting lesson detail {lesson_id}: {e}")
             return None
 
+    async def get_lesson_group_id(self, lesson_id: int) -> Optional[int]:
+        try:
+            async with self.get_connection() as conn:
+                row = await conn.fetchrow(
+                    "SELECT group_id FROM lessons WHERE id = $1",
+                    lesson_id,
+                )
+                return int(row["group_id"]) if row and row["group_id"] is not None else None
+        except Exception as e:
+            logger.error(f"Error getting lesson group id for lesson {lesson_id}: {e}")
+            return None
+
     async def get_homework_for_lesson(self, lesson_id: int) -> Optional[Homework]:
         try:
             async with self.get_connection() as conn:
@@ -557,6 +569,27 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting student count for group {group_id}: {e}")
             return 0
+
+    async def get_group_student_telegram_ids(self, group_id: int) -> List[int]:
+        try:
+            async with self.get_connection() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT DISTINCT tl.telegram_id
+                    FROM student_group_enrollments sge
+                    JOIN users u ON u.id = sge.student_id
+                    JOIN telegram_links tl ON tl.user_id = u.id
+                    WHERE sge.group_id = $1
+                      AND sge.status = 'ACTIVE'
+                      AND u.is_active = true
+                      AND tl.telegram_id IS NOT NULL
+                    """,
+                    group_id,
+                )
+                return [int(row["telegram_id"]) for row in rows]
+        except Exception as e:
+            logger.error(f"Error getting telegram ids for group {group_id}: {e}")
+            return []
 
     async def get_student_submission_for_lesson(self, student_id: int, lesson_id: int) -> Optional[dict]:
         try:

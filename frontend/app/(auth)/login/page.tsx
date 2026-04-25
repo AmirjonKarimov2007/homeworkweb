@@ -48,9 +48,7 @@ function LoginPageContent() {
     try {
       setError(null);
       setIsSubmitting(true);
-      console.log("Login attempt:", { login, password });
       const res = await api.post("/auth/login", { login, password });
-      console.log("Login response:", res.status, res.data);
       const payload = unwrapLoginPayload(res.data);
 
       if (!payload) {
@@ -62,10 +60,8 @@ function LoginPageContent() {
       const last = getLastPath() || "/dashboard";
       router.replace(last);
     } catch (err: any) {
-      console.error("Login error:", err?.response?.data || err);
       const errorDetail = err?.response?.data?.detail || err?.message;
       const errorCode = err?.response?.status;
-      console.error("Error detail:", errorDetail, "Status:", errorCode);
 
       if (errorCode === 401) {
         setError("Login yoki parol noto'g'ri.");
@@ -78,6 +74,10 @@ function LoginPageContent() {
       } else if (errorCode === 0 || err?.code === "ERR_NETWORK") {
         setError("Internet bog'lanish muammosi. Tarmoq aloqadorligini tekshiring.");
       } else {
+        // Unexpected error path: keep silent for users, optional dev hint.
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("Unexpected login failure:", { errorCode, errorDetail });
+        }
         setError(`Xatolik yuz berdi (${errorCode || "noma'lum"}). Qayta urinib ko'ring.`);
       }
     } finally {
@@ -101,7 +101,6 @@ function LoginPageContent() {
       // Trim any leading/trailing spaces from URL decoded values
       const cleanLogin = urlLogin.trim();
       const cleanPassword = urlPassword.trim();
-      console.log("Auto-login from URL:", { urlLogin, urlPassword, cleanLogin, cleanPassword });
       setValue("login", cleanLogin);
       setValue("password", cleanPassword);
       doLogin(cleanLogin, cleanPassword);
