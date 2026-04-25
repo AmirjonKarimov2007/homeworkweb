@@ -4,7 +4,13 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime, date
+import asyncio
+import json
+import urllib.request
+import urllib.error
+import logging
 from app.core.deps import get_db, verify_bot_token
+from app.core.config import settings
 from app.models.telegram import TelegramLink
 from app.models.user import User
 from app.models.group import StudentGroupEnrollment, Group
@@ -15,14 +21,15 @@ from app.models.material import Material, MaterialGroupLink
 from app.models.notification import Notification
 from app.models.homework import HomeworkSubmissionStatus
 from app.models.payment import Payment, PaymentReceiptStatus
-from app.utils.enums import Role, NotificationStatus, EnrollmentStatus
+from app.utils.enums import Role, NotificationStatus, EnrollmentStatus, NotificationChannel
 from app.utils.responses import success
 from app.utils.files import save_upload_file
 from app.services.payment_service import ensure_invoice, create_receipt
 from app.services.homework_service import submit_homework, create_homework_task
-from app.services.notification_service import mark_sent
+from app.services.notification_service import mark_sent, create_notifications_bulk
 
 router = APIRouter(prefix="/bot", tags=["bot"], dependencies=[Depends(verify_bot_token)])
+logger = logging.getLogger(__name__)
 
 
 # ==================== MODELS ====================
@@ -90,6 +97,36 @@ async def _get_all_telegram_ids(session: AsyncSession, role: Optional[Role] = No
         query = query.where(User.role == role)
     result = await session.execute(query)
     return [row[0] for row in result.all()]
+
+
+async def _send_telegram_message(chat_id: int, text: str) -> bool:
+    token = settings.TELEGRAM_BOT_TOKEN
+    if not token:
+        logger.warning("Telegram bot token is missing in backend settings")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps(
+        {
+            "chat_id": chat_id,
+            "text": text,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        url=url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    def _post() -> bool:
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return 200 <= response.status < 300
+        except urllib.error.URLError:
+            return False
+
+    return await asyncio.to_thread(_post)
 
 
 # ==================== LINK & AUTH ====================
@@ -375,10 +412,54 @@ async def bot_create_homework(
         group_id=data.group_id
     )
 
+    enroll_result = await session.execute(
+        select(StudentGroupEnrollment.student_id).where(
+            StudentGroupEnrollment.group_id == data.group_id,
+            StudentGroupEnrollment.status == EnrollmentStatus.ACTIVE,
+        )
+    )
+    student_ids = [row[0] for row in enroll_result.all()]
+    title = f"Yangi uyga vazifa: {task.title}"
+    body = task.instructions or "Sizga yangi uyga vazifa berildi."
+    await create_notifications_bulk(
+        session,
+        student_ids,
+        title=title,
+        body=body,
+        channel=NotificationChannel.WEB,
+    )
+    await create_notifications_bulk(
+        session,
+        student_ids,
+        title=title,
+        body=body,
+        channel=NotificationChannel.TELEGRAM,
+    )
+
+    tg_result = await session.execute(
+        select(TelegramLink.telegram_id).where(
+            TelegramLink.user_id.in_(student_ids),
+            TelegramLink.telegram_id.is_not(None),
+        )
+    )
+    telegram_ids = [row[0] for row in tg_result.all()]
+
+    message_text = (
+        f"📚 Sizda yangi homework bor!\n\n"
+        f"📝 {task.title}\n"
+        f"⏰ Deadline: {task.due_date.strftime('%d.%m.%Y %H:%M') if task.due_date else '-'}"
+    )
+    sent_count = 0
+    for telegram_id in telegram_ids:
+        if await _send_telegram_message(telegram_id, message_text):
+            sent_count += 1
+
     return success({
         "id": task.id,
         "title": task.title,
-        "due_date": task.due_date
+        "due_date": task.due_date,
+        "telegram_target_count": len(telegram_ids),
+        "telegram_sent_count": sent_count,
     })
 
 

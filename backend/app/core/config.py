@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
 
     BOT_INTERNAL_TOKEN: str = "CHANGE_ME_INTERNAL_BOT_TOKEN"
+    TELEGRAM_BOT_TOKEN: str | None = None
 
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
