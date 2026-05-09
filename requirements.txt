@@ -1,0 +1,9 @@
+aiogram==2.25.1
+asyncpg
+python-dotenv
+pydantic
+sqlalchemy
+pydantic-settings
+alembic
+loguru
+bcrypt
