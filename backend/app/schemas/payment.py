@@ -1,4 +1,4 @@
-﻿from pydantic import BaseModel, ConfigDict, Field
+﻿from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime, date
 from app.utils.enums import PaymentStatus, PaymentReceiptStatus, PaymentMethod
 
@@ -53,6 +53,14 @@ class PaymentTransactionCreate(BaseModel):
     amount: int = Field(gt=0)
     payment_method: PaymentMethod
     note: str | None = None
+
+    @field_validator('payment_method', mode='before')
+    @classmethod
+    def normalize_payment_method(cls, v: str) -> str:
+        if isinstance(v, str):
+            # Convert to lowercase for enum matching
+            return v.lower()
+        return v
 
 
 class PaymentTransactionOut(BaseModel):
